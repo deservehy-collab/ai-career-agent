@@ -1,0 +1,279 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# AI 应用开发工程师 —— 岗位画像（人工整理）
+# 版本：v2（第二轮审核稿）
+# 最后更新：2026-10-09
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 【来源索引】
+#   jd_hundsun_001   恒生电子 AI应用开发工程师（J10355）  2027届  杭州   状态：待核实
+#   jd_zhongzhi_001  北京众智诚坚 AI应用工程师（校招）    实习    北京
+#   jd_yisiwei_001   易思维（杭州）AI应用开发工程师       2027届  浙江
+#
+# 【章节映射规则】—— context 由「原文所在章节」决定，不根据技能含义推断
+#   responsibility  ← 恒生电子「岗位职责」
+#                     众智诚坚「岗位职责」
+#                     易思维「职位描述」（编号 1-7；该页没有"岗位职责"这个标题）
+#   qualification   ← 恒生电子「岗位要求」（注意：恒生用的字面是"岗位要求"，
+#                     而非"任职要求"，这是该 JD 的原文用词）
+#                     众智诚坚「任职要求」
+#                     易思维「任职要求」
+#   bonus_section   ← 众智诚坚「加分项」
+#                     恒生电子、易思维均无独立加分项章节，
+#                     故这两份 JD 不会产生该 context 的证据。
+#
+# 【字段语义】
+#   importance        1-5 整数。该技能对岗位的重要程度，人工判断，非招聘方给出的数字。
+#   level             岗位要求的推荐能力等级。仅用项目既有四档：
+#                     入门 / 初级 / 中级 / 高级。不使用 "无"
+#                     （"无" 是 student current_level 的专用值）。
+#   requirement_type  该条证据对应的岗位要求性质：required | preferred | bonus
+#   context           该条证据所在的原文章节：responsibility | qualification | bonus_section
+#
+# 【重要区分 —— required 与 context 不可互替】
+#   required 描述的是"证据性质"，context 描述的是"证据所在章节"。
+#   context: responsibility 的证据**不能单独证明**候选人入职前必须已掌握该技能
+#   —— 岗位职责描述的是这份工作要做什么，任职要求描述的才是候选人必须带什么。
+#   后续能力评估不得把 responsibility 与 qualification 当作同等强度的招聘门槛。
+#
+# 【证据唯一性规则】
+#   唯一性以"完整 evidence"为单位判断。
+#   同一 (source_id, requirement_type, context) 三元组允许重复，
+#   只要 note 对应的原文依据不同。不得仅因三元组相同就删除证据。
+#
+# 【候选技能来源说明】
+#   Python / RAG / Agent 三家全部覆盖；LLM API 仅恒生电子；
+#   Linux、SQL、计算机网络、操作系统仅恒生电子；
+#   Docker、MCP 工具封装仅众智诚坚；易思维全文未提及任何框架与部署要求。
+# ═══════════════════════════════════════════════════════════════════════════
+
+job_id: ai_application_engineer
+job_name: AI 应用开发工程师
+
+aliases:                                # 仅收录本次三份 JD 中实际出现的写法
+  - AI应用开发工程师                     # 恒生电子、易思维 原题
+  - AI应用工程师                         # 北京众智诚坚 原题
+  - AI 应用开发工程师                     # 含空格写法（用户输入容错）
+
+category: llm-application
+origin: human
+version: 2
+updated_at: 2026-10-09
+
+skills:
+
+  # ── 核心 ────────────────────────────────────────────────────────────
+  - skill: Python
+    importance: 5
+    level: 中级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求2「熟练掌握Python或Java任一语言」'}
+      - {source_id: jd_hundsun_001, requirement_type: required, context: responsibility,
+         note: '岗位职责2「使用Python完成大模型调用、数据处理及接口封装」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: qualification,
+         note: '任职要求2「熟练使用 Python，具备实际工程开发经验」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: responsibility,
+         note: '岗位职责4「使用 Python 开发后端服务」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: qualification,
+         note: '任职要求2「具备扎实的Python编程基础」'}
+
+  - skill: RAG
+    importance: 5
+    level: 中级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求8「了解Prompt工程技巧、RAG检索增强生成核心流程」'}
+      - {source_id: jd_hundsun_001, requirement_type: preferred, context: qualification,
+         note: '岗位要求2「…有大模型工具开发、AI应用落地经验（如RAG系统、智能助手）者优先」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: responsibility,
+         note: '岗位职责3「参与 RAG 知识库建设，包括文档处理、检索与 Rerank、效果评测和问题分析」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: qualification,
+         note: '任职要求4「熟悉 Prompt、RAG、Embedding、Agent、Function Calling 等概念」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: qualification,
+         note: '任职要求3「了解大语言模型（LLM）应用开发的基本概念，包括RAG、Function Calling、Agent架构等」'}
+
+  - skill: Agent
+    importance: 5
+    level: 中级
+    evidence:
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: responsibility,
+         note: '岗位职责2「开发 AI Agent，实践 Prompt 设计、结构化输出、Function Calling、工具调用、上下文管理及工作流编排」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: qualification,
+         note: '任职要求4「熟悉 Prompt、RAG、Embedding、Agent、Function Calling 等概念」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: responsibility,
+         note: '职位描述1「开发企业级AI智能体（Agent），覆盖需求分析、编码实现、上线部署的全链路」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: responsibility,
+         note: '职位描述5「参与AI Agent的评估验证与水平测试，协助建立测试体系」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: qualification,
+         note: '任职要求3「了解大语言模型（LLM）应用开发的基本概念，包括RAG、Function Calling、Agent架构等」'}
+    note: >
+      恒生电子 JD 全文未出现 Agent 一词，故本技能不含 jd_hundsun_001 证据。
+      众智诚坚与易思维均在岗位职责与任职要求中双重命中。
+
+  - skill: Prompt Engineering
+    importance: 4
+    level: 中级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求8「了解Prompt工程技巧」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: responsibility,
+         note: '岗位职责2「实践 Prompt 设计」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: qualification,
+         note: '任职要求4「熟悉 Prompt、RAG、Embedding、Agent、Function Calling 等概念」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: responsibility,
+         note: '职位描述4「开展Prompt Engineering的实验设计与效果优化，沉淀可复用的最佳实践」'}
+
+  # ── 重要 ────────────────────────────────────────────────────────────
+  - skill: LLM API
+    importance: 4
+    level: 中级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求7「具备主流LLM API（通义千问、文心一言等）调用与调试经验」'}
+    note: >
+      仅恒生电子明确点名。众智诚坚、易思维提到的是"大语言模型应用"这一整体概念，
+      未单独要求 API 调用，故本条只引一个来源。
+
+  - skill: Function Calling
+    importance: 4
+    level: 中级
+    evidence:
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: responsibility,
+         note: '岗位职责2「实践 Prompt 设计、结构化输出、Function Calling、工具调用、上下文管理及工作流编排」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: qualification,
+         note: '任职要求4「熟悉 Prompt、RAG、Embedding、Agent、Function Calling 等概念」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: qualification,
+         note: '任职要求3「了解大语言模型（LLM）应用开发的基本概念，包括RAG、Function Calling、Agent架构等」'}
+
+  - skill: 后端 API 开发
+    importance: 4
+    level: 中级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: preferred, context: qualification,
+         note: '岗位要求5「了解Python（Flask/FastAPI）或Java（SpringBoot）后端框架者优先」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: responsibility,
+         note: '岗位职责4「使用 Python 开发后端服务，将内部 API、数据服务和业务能力封装为可复用的 Agent Skill 或 MCP 工具」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: qualification,
+         note: '任职要求2「熟练使用 Python，具备实际工程开发经验，能够完成接口、数据处理或后端服务等功能」'}
+    note: >
+      恒生电子侧仅有 preferred 证据（岗位要求5）。
+      恒生电子岗位职责2 中的「接口封装」未被认定为本技能的证据（审核决定 2），
+      故 jd_hundsun_001 在本技能下不出现 responsibility 证据。
+
+  - skill: 测试与效果评测
+    importance: 4
+    level: 中级
+    evidence:
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: responsibility,
+         note: '岗位职责5「完善应用的鉴权、异常处理、日志、测试和文档」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: responsibility,
+         note: '岗位职责3「参与 RAG 知识库建设，包括文档处理、检索与 Rerank、效果评测和问题分析」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: bonus, context: bonus_section,
+         note: '加分项「有 AI 应用评测、Agent Trace、可观测性、权限控制、上下文管理或异常恢复经验」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: responsibility,
+         note: '职位描述5「参与AI Agent的评估验证与水平测试，协助建立测试体系」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: qualification,
+         note: '任职要求4「具备良好的工程素养，包括代码规范、版本控制（Git）、文档意识与测试习惯」'}
+    note: >
+      恒生电子**不含**本技能证据：其原文为「探索与验证」「保障提效方案落地见效」，
+      并非对测试或效果评测的明确要求（复核时已移除该来源）。
+
+  # ── 基础工具与概念 ──────────────────────────────────────────────────
+  - skill: Embedding
+    importance: 3
+    level: 初级
+    evidence:
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: qualification,
+         note: '任职要求4「熟悉 Prompt、RAG、Embedding、Agent、Function Calling 等概念」'}
+    note: 仅众智诚坚明确点名，且是与 Prompt/RAG/Agent 并列的"概念级"要求。
+
+  - skill: 数据结构与算法
+    importance: 3
+    level: 中级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求3「具备扎实的数据结构、算法、计算机网络、操作系统基础」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: qualification,
+         note: '任职要求2「熟悉常用数据结构与算法」'}
+
+  - skill: Git
+    importance: 3
+    level: 初级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求4「熟悉Linux环境、Git版本控制」'}
+      - {source_id: jd_yisiwei_001, requirement_type: required, context: qualification,
+         note: '任职要求4「版本控制（Git）」'}
+
+  - skill: Linux
+    importance: 3
+    level: 初级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求4「熟悉Linux环境」'}
+    note: 仅恒生电子明确要求。众智诚坚、易思维未提及。
+
+  - skill: SQL
+    importance: 3
+    level: 初级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求4「掌握SQL基本操作」'}
+    note: 仅恒生电子明确要求。原文限定为"基本操作"，故定初级。
+
+  - skill: Agent Skill / MCP 工具封装
+    importance: 3
+    level: 初级
+    evidence:
+      - {source_id: jd_zhongzhi_001, requirement_type: required, context: responsibility,
+         note: '岗位职责4「将内部 API、数据服务和业务能力封装为可复用的 Agent Skill 或 MCP 工具」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: bonus, context: bonus_section,
+         note: '加分项「开发过 Agent Skill、MCP Server、AI 全栈应用或其他可展示的相关作品」'}
+    note: >
+      同一来源（jd_zhongzhi_001）内出现两种性质，按来源内不同性质拆成两条证据保留：
+      "岗位需要做这件事"（required / responsibility）与"此前做过是加分"（bonus / bonus_section）
+      是两回事，不可合并。
+      另注：本技能是本画像中**唯一没有 qualification 证据**的技能，
+      其 required 性质完全建立在岗位职责之上 —— 适用本文件头部
+      "required 与 context 不可互替"的说明，不得据此认定候选人入职前必须已掌握。
+
+  # ── 优先 / 加分项 ───────────────────────────────────────────────────
+  - skill: LangChain / LangGraph
+    importance: 3
+    level: 中级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: preferred, context: qualification,
+         note: '岗位要求9「有Hugging Face、LangChain等大模型开发工具使用经验…者优先」'}
+      - {source_id: jd_zhongzhi_001, requirement_type: bonus, context: bonus_section,
+         note: '加分项「使用过 LangChain、LangGraph、LlamaIndex 或其他 Agent、RAG 开发框架」'}
+    note: >
+      ⚠️ 非硬性要求。恒生电子标注"…者优先"（preferred），
+      众智诚坚列在【加分项】标题下（bonus）。
+      importance 为 3，与该证据强度一致。不得在其他环节被改写为硬性要求。
+      易思维未提及。
+
+  - skill: 计算机网络
+    importance: 2
+    level: 初级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求3「具备扎实的数据结构、算法、计算机网络、操作系统基础」'}
+    note: 与 AI 应用开发的直接关联较弱，保留原因是来源 JD 明确列出。
+
+  - skill: 操作系统
+    importance: 2
+    level: 初级
+    evidence:
+      - {source_id: jd_hundsun_001, requirement_type: required, context: qualification,
+         note: '岗位要求3「具备扎实的数据结构、算法、计算机网络、操作系统基础」'}
+    note: 与"计算机网络"同出一句计算机基础要求，来源亦仅恒生电子。
+
+  - skill: Docker
+    importance: 2
+    level: 初级
+    evidence:
+      - {source_id: jd_zhongzhi_001, requirement_type: bonus, context: bonus_section,
+         note: '加分项「有 Docker、云服务、CI/CD 或生产环境部署经验」'}
+    note: >
+      ⚠️ 仅为加分项。恒生电子、易思维均未提及 Docker。
+      不得当作岗位硬性要求。

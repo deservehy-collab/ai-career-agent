@@ -11,3 +11,6 @@ wheels/
 
 # Environment variables
 .env
+
+# Vector index（Chroma 持久化文件，可由 scripts/build_index.py 从 knowledge/jobs 与 knowledge/jd 重建，不入库）
+knowledge/index/

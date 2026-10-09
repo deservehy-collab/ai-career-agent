@@ -2,3 +2,7 @@
 langchain-ollama>=1.1.0
 langgraph>=1.2.14
 pydantic>=2.13.5
+
+# RAG 岗位知识库（向量库 + LangChain 适配层，见 scripts/build_index.py）
+chromadb>=1.5.9
+langchain-chroma>=1.1.0

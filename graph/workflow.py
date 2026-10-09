@@ -1,6 +1,8 @@
-"""LangGraph 工作流：把五个 Agent 串成一条顺序流水线。
+"""LangGraph 工作流：把各 Agent 串成一条顺序流水线。
 
-START → profile → job → assessment → learning → project → END
+START → profile → retrieval → job → assessment → learning → project → END
+
+其中 retrieval 节点只做岗位知识库检索，失败会降级为空证据，不影响后续节点。
 """
 
 from langgraph.graph import END, START, StateGraph
@@ -10,11 +12,13 @@ from agents.job_agent import job_node
 from agents.learning_agent import learning_node
 from agents.profile_agent import profile_node
 from agents.project_agent import project_node
+from agents.retrieval_agent import retrieval_node
 from graph.state import CareerState
 
 # 节点名 → 处理函数
 NODES = {
     "profile": profile_node,
+    "retrieval": retrieval_node,
     "job": job_node,
     "assessment": assessment_node,
     "learning": learning_node,
@@ -22,7 +26,7 @@ NODES = {
 }
 
 # 顺序执行的节点顺序，add_edge 也按这个顺序连
-ORDER = ["profile", "job", "assessment", "learning", "project"]
+ORDER = ["profile", "retrieval", "job", "assessment", "learning", "project"]
 
 
 def build_workflow():
