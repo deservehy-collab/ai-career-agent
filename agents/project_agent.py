@@ -3,8 +3,20 @@
 from pydantic import BaseModel, Field
 
 from agents.llm import structured_invoke
-from agents.utils import check_non_empty, dedupe_by, log
+from agents.project_knowledge import DIFFICULTY_RANK, ProjectKnowledgeBase
+from agents.retriever import SkillVocabulary
+from agents.utils import (
+    SKILL_LEVELS,
+    build_skill_mapping,
+    check_non_empty,
+    dedupe_by,
+    log,
+    resolve_canonical,
+)
 from graph.state import CareerState, check_update
+
+# Assessment Agent 给出的"已满足"状态：这类技能不是待补缺口
+SATISFIED_STATUS = "已满足"
 
 PROMPT = """你是一名技术项目实训导师。请为一名想成为「{target_job}」的大学生
 设计实战项目。
@@ -14,6 +26,9 @@ PROMPT = """你是一名技术项目实训导师。请为一名想成为「{targ
 
 【已经为他安排的学习路线】
 {learning_plan}
+
+【Project 知识库·候选项目模板（检索自 Project 知识库，优先从中挑选/参考）】
+{project_knowledge}
 
 【核心理念】
 不要只是告诉他"去学什么"，而是**用项目把能力缺口补上**。
@@ -26,17 +41,29 @@ PROMPT = """你是一名技术项目实训导师。请为一名想成为「{targ
 1. 设计 2~3 个项目，难度递进，第 1 个最简单。
 2. 每个项目必须同时覆盖**至少 2 项**能力差距，覆盖得越多越好；
    优先覆盖优先级"高"的缺口。
-3. covers_gaps 必须使用上面给出的能力差距里的技能原名，一字不差，
+3. **优先从【Project 知识库·候选项目模板】中选择与用户技能差距匹配的模板**，
+   在模板基础上结合本用户情况做具体化；若没有合适模板再自行设计。
+   不要因为综合项目名字好听就无条件推荐——必须结合本用户的差距与学习计划判断。
+   **候选清单里标了"暂不适合作当前项目"的，本轮一律不要推荐**，
+   也不要换个名字推荐同一件事；它们是等高优先级缺口补齐之后才做的。
+4. 项目顺序按难度递进，第 1 个最简单；候选清单已经按难度从易到难排好，
+   照这个顺序来，**不要自己重排成"最能补缺口的排前面"**。
+5. covers_gaps 必须使用上面给出的能力差距里的技能原名，一字不差，
    一项技能写完整（写"Agent 与工作流编排"，不要拆成"Agent"、"工作流编排"）。
-4. name 只写项目名称本身，短一点、像项目名
+   **只写状态为"明显不足"或"部分满足"的缺口**：状态"已满足"的技能他已经达标，
+   不是缺口，不要写进 covers_gaps。项目当然可以继续训练他已经会的技术，
+   那写在 tech_stack 里就行，不要用它来充"补了多少缺口"。
+6. name 只写项目名称本身，短一点、像项目名
    （如"AI 智能求职助手"），不要把阶段号、说明写进名字里。
-5. goal 写这个项目要达成什么、补哪些能力，**不要出现"阶段"两个字**；
+7. goal 写这个项目要达成什么、补哪些能力，**不要出现"阶段"两个字**；
    阶段信息只写在 stage 字段里，stage 要和上面的学习路线对得上。
-6. tech_stack 写这个项目实际会用到的技术，必须包含 covers_gaps 里的技能。
-7. deliverable 写最终交付物，要具体可验收，
+8. tech_stack 写这个项目实际会用到的技术，必须包含 covers_gaps 里的技能。
+   只写技术名称（Python、FastAPI、Docker），不要把能力描述当技术写进来
+   （例如"类""类型注解""调试定位问题"都不是技术栈）。
+9. deliverable 写最终交付物，要具体可验收，
    例如"一个能跑的 HTTP 服务 + GitHub 仓库 + README 部署说明 + Dockerfile"。
-8. 项目要做学生真正能做完的规模，不要设计成企业级系统。
-9. 全部用中文，技术名称保留英文原文。"""
+10. 项目要做学生真正能做完的规模，不要设计成企业级系统。
+11. 全部用中文，技术名称保留英文原文。"""
 
 
 class ProjectItem(BaseModel):
@@ -57,10 +84,12 @@ class ProjectPlan(BaseModel):
 
 
 def _format_gaps(gaps: list) -> str:
+    """列出能力差距，并标出**状态** —— 模型要靠它区分"还没满足的缺口"与"已经会的技能"。"""
     if not gaps:
         return "（无）"
     return "\n".join(
-        f"- {g.get('skill')}｜优先级 {g.get('priority')}｜{g.get('gap')}" for g in gaps
+        f"- {g.get('skill')}｜状态 {g.get('status')}｜优先级 {g.get('priority')}｜{g.get('gap')}"
+        for g in gaps
     )
 
 
@@ -72,22 +101,424 @@ def _format_learning_plan(stages: list) -> str:
     )
 
 
+def _student_levels(user_skills: list, vocabulary) -> dict:
+    """``{规范技能名: 学生等级}`` —— 只采信 Profile Agent 的原数据，不问模型重评。"""
+    levels: dict[str, str] = {}
+    for item in user_skills or []:
+        if not isinstance(item, dict):
+            continue
+        canonical = resolve_canonical(item.get("skill"), vocabulary)
+        if canonical is None:
+            continue
+        level = str(item.get("level") or "").strip()
+        if not level or level == "无":
+            continue
+        current = levels.get(canonical)
+        if current is None or _level_rank(level) > _level_rank(current):
+            levels[canonical] = level
+    return levels
+
+
+def _level_rank(level: str) -> int:
+    return SKILL_LEVELS.index(level) if level in SKILL_LEVELS else -1
+
+
+def normalize_gap_skills(gap_skills: list, vocabulary) -> tuple[list[str], list[str]]:
+    """把原始技能缺口名归一为**项目知识库使用的规范技能名**（B4 修复）。
+
+    为什么必须归一：项目模板的 ``covers_skills`` 用的是知识库规范名
+    （``Agent``、``后端 API 开发``），而 ``skill_gaps`` 里可能是模型写出来的
+    非规范写法（``Agent与工作流编排``、``后端服务``）—— 不归一的话覆盖度永远
+    算成 0，``score`` 与 ``matched_skills`` 全是错的。
+
+    返回 ``(canonical, unmapped)``：
+
+    - ``canonical``：能唯一归一的规范技能名，去重保序（LangChain 与 LangGraph
+      归一后是同一个技能，只保留一个）；
+    - ``unmapped``：没命中或有歧义的原始名。**不猜**，并且把它们排除在匹配之外，
+      免得"工程化与部署"这类岗位能力分类标签被误算成知识库里的某个具体技能。
+
+    只产出新列表，**不改动**调用方传进来的 ``skill_gaps`` / ``learning_plan``。
+    归一复用的是 ``agents.utils`` 里与其它 Agent 共用的同一套工具，避免各写一份
+    口径不一致的映射。
+    """
+    mapping, unmapped = build_skill_mapping(gap_skills or [], vocabulary)
+    return list(dict.fromkeys(mapping.values())), unmapped
+
+
+def _load_project_templates(gap_skills: list[str], learning_plan: list,
+                            student_levels: dict | None = None) -> str:
+    """从 Project 知识库检索匹配的项目模板，供 prompt 使用。
+
+    与旧版的三点差别（对应验收报告 S3）：
+
+    1. 候选只取"当前就能上手"的难度（beginner / intermediate），高级综合项目
+       进 blocked 列表并注明原因，明确告诉模型本轮不要推荐；
+    2. 排序不再只是知识库的覆盖数排序，而是**难度从易到难**，模型照抄也不会
+       把最难的排在最前；
+    3. 前置技能一个都不具备的项目同样不进入候选。
+
+    ``gap_skills`` 由调用方先经 :func:`normalize_gap_skills` 归一为**规范技能名**
+    （B4）—— 模板的 ``covers_skills`` 是规范名，传原始缺口名会让覆盖度恒为 0。
+
+    知识库加载或查询失败时打印警告并回退到纯模型生成，不中断工作流。
+    """
+    names = [str(s).strip() for s in gap_skills if str(s).strip()]
+    plan_skills: list[str] = []
+    for stage in learning_plan or []:
+        if isinstance(stage, dict):
+            plan_skills.extend(c for c in stage.get("covers") or [] if str(c).strip())
+    # 差距技能优先，学习计划技能作补充（去重、保序）
+    combined: list[str] = []
+    for n in names + plan_skills:
+        if n not in combined:
+            combined.append(n)
+    if not combined:
+        return "（无差距技能，无法筛选项目模板）"
+
+    try:
+        base = ProjectKnowledgeBase()
+        executable, blocked = base.recommend_for_user(combined, student_levels)
+        if not executable and not blocked:
+            return "（知识库中无可直接匹配的项目模板，请自行结合差距设计）"
+
+        lines = [
+            "候选已按**难度从易到难**排列；你输出的项目顺序也必须难度递进，"
+            "第 1 个最简单。"
+        ]
+        for p in executable:
+            lines.append(
+                f"- {p['name']}（难度 {p['difficulty']}）：覆盖 "
+                f"{'、'.join(p.get('covers_skills', [])) or '—'}；前置 "
+                f"{'、'.join(p.get('prerequisites', [])) or '—'}；交付物 {p.get('deliverable', '—')}；"
+                f"验收 {len(p.get('acceptance_criteria', []))} 条；预计 {p.get('estimated_weeks', '—')} 周"
+            )
+        if blocked:
+            lines.append("")
+            lines.append("【以下项目暂不适合作当前执行的项目，本轮不要推荐，也不要换个名字推荐同一件事】")
+            for p in blocked:
+                lines.append(
+                    f"- {p['name']}（难度 {p['difficulty']}）：{p['blocked_reason']}；"
+                    f"尚缺前置 {'、'.join(p.get('missing_prerequisites') or []) or '—'}"
+                )
+        return "\n".join(lines)
+    except Exception as exc:  # noqa: BLE001 - 回退路径，捕获一切异常以保证不中断
+        log("Project Agent", f"Project 知识库检索失败，回退纯模型生成：{exc}")
+        return "（知识库暂时不可用，请按方法自行设计）"
+
+
+def _blocked_templates(gap_skills: list[str], learning_plan: list,
+                       student_levels: dict | None) -> list[dict]:
+    """取"暂不推荐"的项目模板（失败返回空列表），供生成后兜底校验。
+
+    ``gap_skills`` 同样要求是归一后的规范技能名，与 :func:`_load_project_templates` 一致。
+    """
+    names = [str(s).strip() for s in gap_skills if str(s).strip()]
+    plan_skills: list[str] = []
+    for stage in learning_plan or []:
+        if isinstance(stage, dict):
+            plan_skills.extend(c for c in stage.get("covers") or [] if str(c).strip())
+    combined = list(dict.fromkeys(names + plan_skills))
+    if not combined:
+        return []
+    try:
+        _, blocked = ProjectKnowledgeBase().recommend_for_user(combined, student_levels)
+        return blocked
+    except Exception:  # noqa: BLE001 - 校验辅助，失败不影响主流程
+        return []
+
+
+def _gap_name_index(gaps: list, vocabulary) -> tuple[dict, set]:
+    """``({规范技能名: 原始缺口名}, {原始缺口名})`` —— align / drop 共用同一口径。"""
+    canonical_to_gap: dict[str, str] = {}
+    for gap in gaps or []:
+        name = str(gap.get("skill") or "").strip()
+        canonical = resolve_canonical(name, vocabulary)
+        if canonical and canonical not in canonical_to_gap:
+            canonical_to_gap[canonical] = name
+    gap_names = {str(g.get("skill") or "").strip() for g in gaps or []}
+    return canonical_to_gap, gap_names
+
+
+def drop_unlinked_covers_gaps(projects: list, gaps: list, vocabulary) -> list[str]:
+    """从 ``covers_gaps`` 里剔除**不属于本用户技能缺口**的技能名（问题 2）。
+
+    ``covers_gaps`` 的语义是"这个项目能补上我的哪几个缺口"，本该只出现
+    ``skill_gaps`` 里的名字。但模型常照抄知识库模板的 ``covers_skills``（如
+    ``Embedding``），而本用户并不缺这项 —— 留着它下游既对不上号，输出也在骗人。
+
+    这里做的是**剔除**，不是放宽判定：判定标准一个字没改，只是不再把对不上的
+    名字塞进结果。被剔除的项会以说明形式返回，不静默吞掉。
+
+    必须在 :func:`align_covers_gaps` **之前**调用：先清掉对不上的，映射阶段
+    就不会再碰到"无法关联"的项。能映射的项在这里原样保留，交给映射阶段处理。
+    """
+    canonical_to_gap, gap_names = _gap_name_index(gaps, vocabulary)
+    notes: list[str] = []
+
+    for project in projects or []:
+        kept: list[str] = []
+        removed: list[str] = []
+        for raw in project.get("covers_gaps") or []:
+            name = str(raw or "").strip()
+            if not name:
+                continue
+            if name in gap_names:
+                kept.append(name)
+                continue
+            canonical = resolve_canonical(name, vocabulary)
+            if canonical and canonical_to_gap.get(canonical):
+                kept.append(name)  # 能回映射到缺口，留给 align_covers_gaps 处理
+            else:
+                removed.append(name)
+
+        project["covers_gaps"] = list(dict.fromkeys(kept))
+        if removed:
+            tail = "（该项目已无任何关联本用户缺口的技能）" if not project["covers_gaps"] else ""
+            notes.append(
+                f"项目「{project.get('name')}」的 covers_gaps 中 {removed} 不属于本用户的"
+                f"技能缺口，已从该项剔除{tail}"
+            )
+    return notes
+
+
+def align_covers_gaps(projects: list, gaps: list, vocabulary) -> list[str]:
+    """把 ``covers_gaps`` 映射回**原始 skill_gaps 名称**，返回问题清单。
+
+    模型经常输出知识库里的规范技能名（RAG、Agent、后端 API 开发），而本用户的
+    skill_gaps 里叫的是别的写法（Agent与工作流编排、后端服务）。不映射的话下游
+    根本对不上号，所以这里按规范名反查回原名；确实对不上的保留原值并报告。
+    """
+    canonical_to_gap: dict[str, str] = {}
+    for gap in gaps or []:
+        name = str(gap.get("skill") or "").strip()
+        canonical = resolve_canonical(name, vocabulary)
+        if canonical and canonical not in canonical_to_gap:
+            canonical_to_gap[canonical] = name
+    gap_names = {str(g.get("skill") or "").strip() for g in gaps or []}
+
+    issues: list[str] = []
+    for project in projects:
+        aligned: list[str] = []
+        for raw in project.get("covers_gaps") or []:
+            name = str(raw or "").strip()
+            if not name:
+                continue
+            if name in gap_names:
+                aligned.append(name)
+                continue
+            canonical = resolve_canonical(name, vocabulary)
+            mapped = canonical_to_gap.get(canonical) if canonical else None
+            if mapped:
+                aligned.append(mapped)
+            else:
+                aligned.append(name)
+                issues.append(
+                    f"项目「{project.get('name')}」的 covers_gaps 含无法关联到 skill_gaps 的技能：{name}"
+                )
+        # 去重保序
+        project["covers_gaps"] = list(dict.fromkeys(aligned))
+    return issues
+
+
+def check_blocked_projects(projects: list, blocked: list, threshold: float = 0.6) -> list[str]:
+    """兜底校验：模型可能无视"暂不推荐"提示，仍把超难度综合项目排进计划。
+
+    ProjectItem 结构固定、项目名还可能被改写，所以只能按 ``covers_gaps`` 与
+    被拦模板的 ``covers_skills`` 的重合度来判断：重合度高就说明它实质上仍是那个
+    被拦下来的项目，必须告警。
+    """
+    issues: list[str] = []
+    for project in projects or []:
+        covered = {str(s).strip() for s in project.get("covers_gaps") or []}
+        if not covered:
+            continue
+        for template in blocked or []:
+            targets = {str(s).strip() for s in template.get("covers_skills") or []}
+            if not targets:
+                continue
+            overlap = len(covered & targets) / len(targets)
+            if overlap >= threshold:
+                issues.append(
+                    f"项目「{project.get('name')}」的 covers_gaps 与暂不推荐的「{template['name']}」"
+                    f"（{template.get('blocked_reason', '前置/难度不足')}）重合 {overlap:.0%}，"
+                    f"可能仍被当成当前可执行项目"
+                )
+                break
+    return issues
+
+
+def _template_difficulty_rank(name, base: ProjectKnowledgeBase | None) -> int | None:
+    """项目名 → 知识库模板的难度序号；**匹配不到就返回 None，绝不猜一个难度**。
+
+    项目名可能被模型改写、也可能完全自创，所以只有能可靠找回模板的才给难度。
+    """
+    if base is None:
+        return None
+    text = str(name or "").strip()
+    if not text:
+        return None
+    for template in base.projects:
+        tname = template["name"]
+        if text == tname or text in tname or tname in text:
+            return DIFFICULTY_RANK[template["difficulty"]]
+    return None
+
+
+def check_difficulty_order(projects: list, base: ProjectKnowledgeBase | None) -> list[str]:
+    """难度递进的尽力校验：能按项目名找回知识库模板的，检查难度是否递增。
+
+    项目名可能被模型改写、也可能完全自创，因此对不上的直接跳过 —— 这里只做
+    能可靠判定的那部分，不猜。
+    """
+    if base is None:
+        return []
+    ranks: list[tuple[str, int]] = []
+    for project in projects or []:
+        name = str(project.get("name") or "").strip()
+        rank = _template_difficulty_rank(name, base)
+        if rank is not None:
+            ranks.append((name, rank))
+    issues: list[str] = []
+    for (prev_name, prev_rank), (name, rank) in zip(ranks, ranks[1:]):
+        if rank < prev_rank:
+            issues.append(
+                f"项目顺序不是难度递进：「{prev_name}」比后面的「{name}」更难，"
+                f"第 1 个应当最简单"
+            )
+    return issues
+
+
+def unmet_gaps(gaps: list) -> list:
+    """还没满足、需要项目来补的缺口。
+
+    ``covers_gaps`` 的语义是"这个项目能帮我补上哪几个**尚未满足**的缺口"。
+    已满足的技能不属于缺口 —— 项目当然可以继续训练它（那是 ``covers_skills``，
+    训练技能），但不能拿它去充缺口覆盖度，否则"教你已经会的东西"的项目会排到前面。
+    """
+    return [g for g in (gaps or []) if str(g.get("status") or "") != SATISFIED_STATUS]
+
+
+def order_projects_by_difficulty(projects: list, gaps: list,
+                                 base: ProjectKnowledgeBase | None) -> tuple[list[dict], list[str]]:
+    """稳定重排项目，返回 ``(新列表, 说明)``。
+
+    排序规则（依次比较）：
+
+    1. 难度由低到高（难度取自知识库模板，不自行猜测）；
+    2. 难度相同时，覆盖**高优先级**缺口更多的排前面；
+    3. 仍然相同时保持**原有相对顺序**（排序键末位用原下标，属稳定排序）。
+
+    匹配不到知识库模板的项目**不赋予难度**，统一排在已知难度之后，
+    内部保持原有顺序 —— 不会因为"猜一个难度"而被错误地插到中间。
+
+    只重排列表顺序，**不动任何项目字段**（covers_gaps / tech_stack / goal 等原样保留）。
+    """
+    if not projects:
+        return list(projects), []
+
+    high = {
+        str(g.get("skill") or "").strip()
+        for g in (gaps or [])
+        if g.get("priority") == "高"
+    }
+
+    known: list[tuple[int, int, int, dict]] = []
+    unknown: list[dict] = []
+    for index, project in enumerate(projects):
+        rank = _template_difficulty_rank(project.get("name"), base)
+        if rank is None:
+            unknown.append(project)
+            continue
+        covered = {str(s).strip() for s in project.get("covers_gaps") or []}
+        known.append((rank, -len(covered & high), index, project))
+
+    known.sort(key=lambda item: (item[0], item[1], item[2]))
+    ordered = [item[3] for item in known] + unknown
+
+    if not any(before is not after for before, after in zip(projects, ordered)):
+        return ordered, []
+
+    notes = ["已按「难度升序 → 高优先级缺口覆盖数降序 → 原顺序」重排项目：模型给出的原始顺序不是难度递进"]
+    if unknown:
+        names = [str(p.get("name") or "") for p in unknown]
+        notes.append(f"以下项目匹配不到知识库模板，未赋予难度、统一排在已知难度之后：{names}")
+    return ordered, notes
+
+
+def _load_vocabulary() -> SkillVocabulary | None:
+    """取技能词表；不可用返回 None，节点降级为"不做技能名归一"。"""
+    try:
+        return SkillVocabulary()
+    except Exception as exc:  # noqa: BLE001 - 降级路径
+        log("Project Agent", f"技能词表不可用，跳过技能名归一：{exc}")
+        return None
+
+
 def project_node(state: CareerState) -> dict:
     """LangGraph 节点：读取 skill_gaps / learning_plan，写入 project_plan。"""
     gaps = state.get("skill_gaps") or []
     if not gaps:
         raise ValueError("state 中缺少 skill_gaps，无法设计实战项目")
 
+    learning_plan = state.get("learning_plan") or []
+    vocabulary = _load_vocabulary()
+    # 学生真实水平只从 Profile Agent 的原数据来，不问模型
+    student_levels = _student_levels(state.get("user_skills") or [], vocabulary)
+
+    # B4：项目模板的 covers_skills 是规范技能名，缺口名必须**先归一**再参与
+    # 覆盖度、匹配、评分与排序，否则覆盖率恒为 0。归一只产出新列表，原始
+    # skill_gaps / learning_plan 不动；这里刻意**不**碰 covers_gaps 的输出映射，
+    # 那是 align_covers_gaps 的职责，两件事不能混。
+    # 修复 3：只有**尚未满足**的缺口参与项目匹配、covers_gaps 与覆盖度计算。
+    # 已满足的技能属于"项目还能训练什么"（covers_skills），不是"我还缺什么"。
+    project_gaps = unmet_gaps(gaps)
+    raw_gap_skills = [g.get("skill") for g in project_gaps]
+    match_skills, unmapped_skills = normalize_gap_skills(raw_gap_skills, vocabulary)
+    if unmapped_skills:
+        print(
+            f"[Project Agent] 警告：以下缺口无法唯一归一为项目知识库的规范技能名，"
+            f"已排除在项目匹配之外（不猜测、不计入覆盖度）：{unmapped_skills}",
+            flush=True,
+        )
+
     prompt = PROMPT.format(
         target_job=state.get("target_job", "目标岗位"),
         gaps=_format_gaps(gaps),
-        learning_plan=_format_learning_plan(state.get("learning_plan") or []),
+        learning_plan=_format_learning_plan(learning_plan),
+        project_knowledge=_load_project_templates(match_skills, learning_plan, student_levels),
     )
     plan = structured_invoke(prompt, ProjectPlan)
 
     projects = [p.model_dump() for p in plan.projects]
     projects = dedupe_by(projects, key="name")
     check_non_empty(projects, "Project Agent 的项目列表", minimum=1)
+
+    # 兜底校验（先做重合度检查：它看的是模型原始写法的 covers_gaps，
+    # 一旦被 align 改写成缺口原名就不好比对了）
+    blocked = _blocked_templates(match_skills, learning_plan, student_levels)
+    issues = check_blocked_projects(projects, blocked)
+    if vocabulary is not None:
+        # 先剔除"不属于本用户缺口"的技能名，再做回映射 —— 顺序反了映射阶段
+        # 就会对着这些名字报"无法关联"。剔除是说明性提示，不是失败告警。
+        for note in drop_unlinked_covers_gaps(projects, project_gaps, vocabulary):
+            print(f"[Project Agent] 提示：{note}", flush=True)
+        issues.extend(align_covers_gaps(projects, project_gaps, vocabulary))
+    try:
+        base = ProjectKnowledgeBase()
+    except Exception:  # noqa: BLE001 - 校验辅助，失败不影响主流程
+        base = None
+
+    # 修复 2：把模型给出的项目顺序重排成"难度递进 → 高优先级缺口覆盖多的靠前"。
+    # 放在 covers_gaps 定稿之后，才能按高优先级缺口覆盖数做次级排序。
+    ordered, order_notes = order_projects_by_difficulty(projects, project_gaps, base)
+    projects = ordered
+    for note in order_notes:
+        print(f"[Project Agent] {note}", flush=True)
+
+    issues.extend(check_difficulty_order(projects, base))
+    for issue in issues:
+        print(f"[Project Agent] 警告：{issue}", flush=True)
 
     log("Project Agent")
     return check_update({"project_plan": projects}, "Project Agent")

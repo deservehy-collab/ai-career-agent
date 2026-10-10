@@ -24,6 +24,36 @@ def show(title: str, data) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+# 终端展示用的学习阶段字段：只挑原有业务字段
+LEARNING_STAGE_FIELDS = (
+    "stage",
+    "topic",
+    "goal",
+    "covers",
+    "prerequisite",
+    "completion_criteria",
+    "estimated_weeks",
+)
+
+
+def public_learning_plan(stages: list) -> list:
+    """把学习路线投影成**只含原有业务字段**的展示形态。
+
+    阶段字典里还有 ``skill_mapping`` / ``unmapped_covers`` /
+    ``dropped_low_priority`` 等内部追踪字段 —— 它们在 state 里**继续保留**
+    （下游与排查都要用），只是在终端展示这一层被过滤掉，避免把内部口径
+    混进给用户看的输出。这里**只做投影，不删任何内部数据**。
+
+    缺失字段一律按 None 处理：``dropped_low_priority`` 本来就是"非空才写"，
+    空路线也不能让展示炸掉。
+    """
+    return [
+        {key: stage.get(key) for key in LEARNING_STAGE_FIELDS}
+        for stage in (stages or [])
+        if isinstance(stage, dict)
+    ]
+
+
 def show_retrieval(result: dict) -> None:
     """展示岗位知识库检索结果（纯展示，不参与后续规划计算）。"""
     print(f"\n{'=' * 10} 岗位知识库检索 {'=' * 10}")
@@ -78,6 +108,6 @@ if __name__ == "__main__":
     show_retrieval(result)
     show("岗位要求", result.get("job_requirements", []))
     show("能力差距", result.get("skill_gaps", []))
-    show("学习路线", result.get("learning_plan", []))
+    show("学习路线", public_learning_plan(result.get("learning_plan", [])))
     show("项目路线", result.get("project_plan", []))
     show("最终方案", build_final_plan(result))

@@ -1,0 +1,106 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Skill 知识库 —— 核心技能（阶段三 v1）
+# 说明：
+#   - skill 名称必须与 knowledge/jobs/ai-application-engineer.yaml 中的技能名完全一致，
+#     不得自行创造新的规范技能名。
+#   - prerequisites 只能引用知识库中真实存在的规范技能（本项目 12 项已收录技能，
+#     或岗位知识库其他技能），不得依赖一个未收录的技能。
+#   - level_guides 的四个等级（入门/初级/中级/高级）必须完整，与 agents/utils.py
+#     的 SKILL_LEVELS 口径一致。
+# ═══════════════════════════════════════════════════════════════════════════
+
+- skill: Python
+  category: core
+  level_guides:
+    入门: 能看懂并运行 Python 脚本，理解变量、分支、循环、函数等基础语法。
+    初级: 能独立编写可运行的脚本，会用列表、字典、异常处理、文件读写和常用标准库。
+    中级: 能独立完成模块化开发，会写类、用类型注解、调试定位问题，能把 AI 服务封装成模块。
+    高级: 能主导工程结构设计，会性能优化、异步编程，能讲清解释器与内存机制等底层原理。
+  prerequisites: []
+  typical_usage: AI 应用开发岗位的基础语言，用于大模型调用、数据处理、接口封装和后端服务开发。
+  common_pitfalls:
+    - 混淆 "=" 赋值的可变对象引用，导致无意中共享同一份数据。
+    - 异常处理过于笼统，用裸 except 吞掉真实错误，难以排查。
+    - 把依赖全挂在全局，脚本一长就难以测试和维护。
+  learning_resources: []
+  estimated_weeks: 3
+
+- skill: RAG
+  category: core
+  level_guides:
+    入门: 能解释 RAG 的检索-增强-生成三阶段流程，说清为什么需要它。
+    初级: 能用现成工具搭建一个简单的文档问答，会文档切分和基本检索。
+    中级: 能独立完成 RAG 知识库建设，包括文档处理、检索与 Rerank、效果评测和问题分析。
+    高级: 能优化召回与生成质量，能设计混合检索、评测指标与边界场景兜底方案。
+  prerequisites: [Python, Embedding, Prompt Engineering]
+  typical_usage: 把企业/个人文档变成可问答的知识库，是 AI 应用落地的高频能力，如问答机器人、内部资料检索。
+  common_pitfalls:
+    - 不看切分粒度，整段塞进向量库导致语义被稀释、检索不准。
+    - 只做向量召回，不做 Rerank 和评测，效果好不好说不清。
+    - 把检索出的原文直接当"事实"，忽略来源校验和幻觉风险。
+  learning_resources: []
+  estimated_weeks: 4
+
+- skill: Agent
+  category: core
+  level_guides:
+    入门: 能解释 Agent 的概念，能跑通官方示例，说清"模型+工具+循环"的基本结构。
+    初级: 能独立做简单的 Prompt 设计 + 工具调用编排，实现单轮的工具选择。
+    中级: 能设计多工具工作流，处理结构化输出、工具调用、上下文管理和简单状态。
+    高级: 能主导 Agent 架构，处理复杂状态、异常恢复与并发，能评估和优化 Agent 效果。
+  prerequisites: [Python, Prompt Engineering]
+  typical_usage: 把大模型能力封装成可自主调用工具、分步完成任务的工作流，是 AI 应用开发的核心能力之一。
+  common_pitfalls:
+    - 上下文无限累积，导致调用过长、成本上升甚至超出长度限制。
+    - 工具调用结果的解析不健壮，格式一变化就崩。
+    - 只搭流程不做评测，Agent 出错时无法归因。
+  learning_resources: []
+  estimated_weeks: 4
+
+- skill: Prompt Engineering
+  category: core
+  level_guides:
+    入门: 知道提示词由角色、任务、约束、示例组成，能写出清晰需求。
+    初级: 能用少量示例（few-shot）和结构化要求稳定输出，会调温度等参数。
+    中级: 能针对 3B 小模型设计严格约束的提示词，配合结构化输出 schema 规避不稳定。
+    高级: 能系统性设计并评测提示词（如消融对比），会提炼可复用最佳实践。
+  prerequisites: [Python, LLM API]
+  typical_usage: 让大模型稳定输出预期结构的关键手段，贯穿提示词设计、输出约束、效果优化的全过程。
+  common_pitfalls:
+    - 不给示例，只靠"请规范输出"，小模型容易跑偏。
+    - 一次给太多指令，模型顾此失彼，忽略关键约束。
+    - 输出解析靠字符串硬拆，一旦换说法就失败。
+  learning_resources: []
+  estimated_weeks: 2
+
+- skill: LLM API
+  category: core
+  level_guides:
+    入门: 能理解什么是 LLM API，知道调用的基本请求/响应格式。
+    初级: 能独立完成一次调用并取回文本结果，会处理常见参数（如模型、温度、max_tokens）。
+    中级: 能完成主流 LLM API 的调用与调试，会封装统一的调用层，处理重试与超时。
+    高级: 能对比不同模型的成本与效果做选型，能处理复杂调用链、流式输出与并发。
+  prerequisites: [Python]
+  typical_usage: AI 应用开发的接入基础，用于调用通义千问、文心一言等大模型完成各种生成任务。
+  common_pitfalls:
+    - 不处理超时和重试，网络抖动时整个调用直接失败。
+    - 把 API Key 硬编码进代码或提交到仓库。
+    - 只盯着一个模型，不关注 token 成本与效果差异。
+  learning_resources: []
+  estimated_weeks: 2
+
+- skill: Function Calling
+  category: core
+  level_guides:
+    入门: 知道模型可以识别需要调用外部函数的意图，理解基本机制。
+    初级: 能定义简单的工具函数并让模型调用，能处理返回结果。
+    中级: 能设计多工具的函数调用，处理工具选择、参数校验与结果回填，错误时兜底。
+    高级: 能设计健壮的工具调用链路，处理并发、超时与失败重试，评估调用正确率。
+  prerequisites: [Python, LLM API]
+  typical_usage: 让 Agent 可以调用外部接口与业务能力，是工具编排和 Agent 工作流的核心机制。
+  common_pitfalls:
+    - 工具描述不准确，模型频繁选中错误的工具。
+    - 不校验传入参数，非法参数直接执行导致错误。
+    - 调用失败后没有重试或降级，整个流程中断。
+  learning_resources: []
+  estimated_weeks: 2

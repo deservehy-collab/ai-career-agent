@@ -1,0 +1,21 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Project 知识库 —— 项目模板：AI Agent 服务（中级项目，阶段三 v1）
+# 说明：
+#   - covers_skills / prerequisites 中的技能必须来自岗位知识库的规范技能列表。
+#   - tech_stack 可能包含 FastAPI 等技术名，但这些不作为新的规范技能。
+#   - difficulty 取值：beginner / intermediate / advanced。
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: AI Agent 服务
+difficulty: intermediate
+covers_skills: [Python, LLM API, Function Calling, Agent, 后端 API 开发]
+prerequisites: [Python, Prompt Engineering, LLM API]
+tech_stack: [Python, FastAPI, LangGraph, 通义千问 qwen2.5:3b]
+stage_hint: 学习路线中后期，把 Agent 工作流以后端服务形式稳定对外提供
+deliverable: 一个可通过 HTTP 接口调用的 Agent 服务，能调用工具分步完成任务并返回结构化结果
+acceptance_criteria:
+  - 能通过接口触发 Agent 完成多步任务，期间自主选择并调用配置好的工具
+  - 工具调用结果经校验与回填，调用失败有兜底与重试
+  - 服务提供参数校验、统一错误返回与日志
+  - 输出为结构化格式，供上游或前端稳定消费
+estimated_weeks: 4

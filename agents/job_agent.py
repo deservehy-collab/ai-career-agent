@@ -40,12 +40,37 @@ from pydantic import BaseModel, Field, field_validator
 
 from agents.llm import structured_invoke
 from agents.retriever import SkillVocabulary
-from agents.utils import SKILL_LEVELS, check_non_empty, dedupe_by, log, normalize_level
+from agents.utils import (
+    SKILL_LEVELS,
+    check_non_empty,
+    dedupe_by,
+    log,
+    normalize_level,
+    resolve_canonical,
+)
 from graph.state import CareerState, check_update
 
 # 证据编号：E01 = job_evidence[0]
 _REF_PATTERN = re.compile(r"^E\d{2,}$")
 _NO_REF_TOKENS = ("", "无", "none", "n/a", "-")
+
+# 与 check_non_empty 的下限保持一致：技能名清理后若不足 3 条，宁可保留原始输出也不让节点崩
+MIN_REQUIREMENTS = 3
+
+# 提示词里的「岗位能力分类」清单。它们是**检查覆盖面的标签，不是技能名**，
+# 小模型很容易原样抄进 skill 字段（如"Agent 与工作流编排""工程化与部署"），
+# 于是既查不到知识库、又和真实技能名重复。
+CATEGORY_LABELS = (
+    "编程语言",
+    "大模型调用与提示词工程",
+    "Agent 与工作流编排",
+    "RAG 检索增强",
+    "后端服务",
+    "工程化与部署",
+)
+CATEGORY_LABEL_SET = frozenset(
+    str(label).strip().lower().replace(" ", "") for label in CATEGORY_LABELS
+)
 
 # JD 原文里的等级措辞 → 四档。**由强到弱排列，取第一个命中**，
 # 这样"熟练掌握"会命中"熟练"(高级)，而不是先命中"掌握"(中级)。
@@ -67,29 +92,36 @@ PROMPT = """你是一名资深技术招聘专家。请分析「{job}」这个岗
 
 【岗位定位】先分清这个岗位属于哪一类，再据此拆解：
 - 如果是"大模型 / AI 应用开发"类岗位：它是把大模型能力落地成产品的**工程岗**，
-  不是训练模型的算法岗。此时下列方向**每一类都必须至少覆盖一项**，缺一不可：
-  ① 编程语言        （如 Python）
-  ② 大模型调用与提示词工程（如 LLM API、Prompt Engineering）
-  ③ Agent 与工作流编排    （如 Agent、LangChain、LangGraph、Function Calling，
-                           RAG 不能算作这一项，必须单独出现）
-  ④ RAG 检索增强         （如 Embedding、向量数据库）
-  ⑤ 后端服务            （如 FastAPI）
-  ⑥ 工程化与部署         （如 Docker、Git）
+  不是训练模型的算法岗。此时下列**能力分类**每一类都要至少覆盖一项，缺一不可：
+  ① 编程语言            → 具体技能如 Python
+  ② 大模型调用与提示词工程 → 具体技能如 LLM API、Prompt Engineering
+  ③ Agent 与工作流编排    → 具体技能如 Agent、LangChain、LangGraph、Function Calling
+                           （RAG 不能算作这一项，必须单独出现）
+  ④ RAG 检索增强         → 具体技能如 RAG、Embedding
+  ⑤ 后端服务            → 具体技能如 后端 API 开发、FastAPI
+  ⑥ 工程化与部署         → 具体技能如 Docker、Git、Linux
   在此基础上再补充该岗位会考察的其他技能，不要用 PyTorch、深度学习理论顶替上面这些。
 - 如果是算法 / 研究类岗位：才以机器学习、深度学习框架、数学基础为核心。
 
 【要求】
 1. 给出 6~10 项核心技能，覆盖编程语言、框架、工程能力、计算机基础等不同层面。
-2. 只列这个岗位真正会考察的技能，不要凑数。优先采用上面证据里出现过的技能。
-3. importance 是 1~5 的整数，5 表示最重要。必须有区分度，
+2. **skill 要写"具体技能名"，不要写上面的分类名。**
+   ① ~ ⑥ 是帮你检查覆盖面的**分类标签**，不是技能名：
+   写"Agent"而不是"Agent 与工作流编排"，写"后端 API 开发"而不是"后端服务"，
+   写"Docker"或"Git"而不是"工程化与部署"，写"LLM API"而不是"大模型调用与提示词工程"。
+   只有当某个分类名本身就是规范技能名（如 RAG）时才能直接用。
+3. 只列这个岗位真正会考察的技能，不要凑数。优先采用上面证据里出现过的技能。
+4. **同一个技能只写一次。** 不要用分类标签和具体技能名重复列同一件事
+   （例如"大模型调用与提示词工程"和"Prompt Engineering"是同一条，只保留后者）。
+5. importance 是 1~5 的整数，5 表示最重要。必须有区分度，
    不要把每项都写成 5，最多 2 项可以是 5。
-4. level 是该岗位对这项技能的推荐能力等级（入门/初级/中级/高级）。
-5. reason 用一句话说明这项技能在岗位里具体用来做什么。
-6. evidence_refs 只能填上面【岗位知识库检索证据】里出现过的编号（如 E01、E02），
+6. level 是该岗位对这项技能的推荐能力等级（入门/初级/中级/高级）。
+7. reason 用一句话说明这项技能在岗位里具体用来做什么。
+8. evidence_refs 只能填上面【岗位知识库检索证据】里出现过的编号（如 E01、E02），
    可以填多个；名称和证据里的技能不一样、但语义相关的也可以引用。
    确实找不到能支撑该项的证据时，填 ["无"]。
    **不得编造编号、公司名或原文**；上面没有证据时，所有项都填 ["无"]。
-7. 全部用中文，技能名称保留英文原文（如 Python、FastAPI、Docker）。"""
+9. 全部用中文，技能名称保留英文原文（如 Python、FastAPI、Docker）。"""
 
 
 class JobRequirement(BaseModel):
@@ -185,13 +217,72 @@ def _resolve_canonical(skill_name) -> str | None:
 
     唯一性很关键：名字里恰好包含多个技能名时不猜，交给模型引用。
     """
-    vocabulary = get_vocabulary()
-    if vocabulary is None or not skill_name:
-        return None
-    matches = vocabulary.match_detailed(str(skill_name))
-    if len(matches) != 1:
-        return None
-    return matches[0][0]
+    return resolve_canonical(skill_name, get_vocabulary())
+
+
+def is_category_label(skill_name) -> bool:
+    """判断这个名字是不是提示词里的"岗位能力分类标签"而非具体技能名。"""
+    return _normalize_skill_name(skill_name) in CATEGORY_LABEL_SET
+
+
+def drop_category_labels(requirements: list, dropped: list) -> list:
+    """剔除**无法归一**的分类标签。
+
+    分类标签不是技能名：能唯一归一到规范技能的（如"后端服务"→"后端 API 开发"）
+    留下，由后面的规范名去重合并；归不了的（如"工程化与部署"，规范技能表里
+    没有对应项）说明这句话没有落到任何具体技能上，丢弃并记录，避免它在下游被
+    当成一个凭空存在的"技能"。
+
+    另外两道保护：
+    - 只对**已经有至少 3 条**的输出生效，清理后不足 3 条就整条回退（见 job_node）；
+    - 分类标签之外的技能名一律不动。
+    """
+    kept = []
+    for req in requirements:
+        name = req.get("skill")
+        if is_category_label(name) and _resolve_canonical(name) is None:
+            dropped.append(str(name).strip())
+            continue
+        kept.append(req)
+    return kept
+
+
+def dedupe_by_canonical(requirements: list, merged: list) -> list:
+    """按**规范技能名**去重，消除"分类标签 + 具体技能名"的重复项。
+
+    例如模型同时给出"大模型调用与提示词工程"和"Prompt Engineering"，二者归一后
+    是同一个技能，只保留一条 —— 否则下游会把同一个缺口当成两个，出现
+    "Prompt Engineering 明显不足"与"大模型调用与提示词工程 已满足"并存的矛盾。
+
+    同名组里**优先保留技能名本身就是规范名的那条**，下游拿到的才是干净名字。
+    无法归一的技能按原始名各成一组，不做任何合并。
+    """
+    groups: dict[str, list] = {}
+    order: list[str] = []
+    for req in requirements:
+        canonical = _resolve_canonical(req.get("skill"))
+        key = canonical or f"__raw__{_normalize_skill_name(req.get('skill'))}"
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(req)
+
+    result = []
+    for key in order:
+        items = groups[key]
+        if len(items) > 1:
+            merged.append(items[0].get("skill"))
+        canonical = _resolve_canonical(items[0].get("skill"))
+        if canonical:
+            exact = [
+                item
+                for item in items
+                if _normalize_skill_name(item.get("skill")) == _normalize_skill_name(canonical)
+            ]
+            result.append((exact or items)[0])
+        else:
+            result.append(items[0])
+    return result
 
 
 def format_evidence_block(evidence: list, retrieval_status: str | None) -> str:
@@ -338,9 +429,36 @@ def job_node(state: CareerState) -> dict:
         item["importance"] = max(1, min(5, item["importance"]))
         requirements.append(item)
 
-    # 模型经常把同一个技能列两遍（如 Git），去重后再排序
+    # 模型经常把同一个技能列两遍（如 Git），先按原样名字去重
     requirements = dedupe_by(requirements, key="skill")
-    check_non_empty(requirements, "Job Agent 的岗位技能列表", minimum=3)
+
+    # 再把"岗位能力分类标签"和"同一个技能的不同说法"清掉。
+    # 两步都可能减少条数，所以先试算，清理后仍够 3 条才采用，否则整条回退 ——
+    # 宁可让一条标签漏过去，也不要因此把节点搞崩。
+    dropped_labels: list[str] = []
+    merged_dupes: list[str] = []
+    cleaned = dedupe_by_canonical(drop_category_labels(requirements, dropped_labels), merged_dupes)
+    if len(cleaned) >= MIN_REQUIREMENTS:
+        requirements = cleaned
+        if dropped_labels:
+            print(
+                f"[Job Agent] 警告：模型把岗位能力分类当成了技能名，已丢弃无法对应具体技能的"
+                f"{sorted(set(dropped_labels))}",
+                flush=True,
+            )
+        if merged_dupes:
+            print(
+                f"[Job Agent] 警告：以下技能名归一后重复，已合并为规范技能名：{sorted(set(merged_dupes))}",
+                flush=True,
+            )
+    else:
+        print(
+            f"[Job Agent] 警告：技能名清理后只剩 {len(cleaned)} 条，低于下限 {MIN_REQUIREMENTS}，"
+            f"已保留模型原始输出（未丢弃分类标签）",
+            flush=True,
+        )
+
+    check_non_empty(requirements, "Job Agent 的岗位技能列表", minimum=MIN_REQUIREMENTS)
 
     # 回填证据来源（会覆盖 importance / level，所以必须排在排序之前）
     rejected: list[str] = []

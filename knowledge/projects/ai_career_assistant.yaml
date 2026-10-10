@@ -1,0 +1,23 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Project 知识库 —— 项目模板：AI 求职规划助手（中高级综合项目，阶段三 v1）
+# 说明：
+#   - covers_skills / prerequisites 中的技能必须来自岗位知识库的规范技能列表。
+#   - tech_stack 可能包含 FastAPI 等技术名，但这些不作为新的规范技能。
+#   - difficulty 取值：beginner / intermediate / advanced。
+#   - 这是综合项目，不能因为名字相似就无条件推荐给所有用户；
+#     必须结合用户的技能差距（skill_gaps）和学习计划（learning_plan）来筛选。
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: AI 求职规划助手
+difficulty: advanced
+covers_skills: [Python, RAG, Agent, 后端 API 开发, 测试与效果评测, Docker]
+prerequisites: [Python, RAG, Agent, 后端 API 开发]
+tech_stack: [Python, FastAPI, LangGraph, Chroma, Docker]
+stage_hint: 学习路线后期，综合检索、Agent、后端与工程化，作为阶段性成果
+deliverable: 一个能依据用户画像与目标岗位生成求职规划（技能对比、学习路线、项目建议）的完整服务
+acceptance_criteria:
+  - 能接入并整合用户画像、岗位要求与知识库，生成结构化的规划结果
+  - 检索、Agent 编排与后端服务职责清晰，调用链路稳定
+  - 具备基础测试/评测与日志，提供 Dockerfile 或依赖清单便于部署
+  - 输出结构稳定，便于不同用户复用与对比
+estimated_weeks: 4

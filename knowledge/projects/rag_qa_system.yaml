@@ -1,0 +1,21 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Project 知识库 —— 项目模板：RAG 知识库问答系统（入门至中级项目，阶段三 v1）
+# 说明：
+#   - covers_skills / prerequisites 中的技能必须来自岗位知识库的规范技能列表。
+#   - tech_stack 可能包含 FastAPI 等技术名，但这些不作为新的规范技能。
+#   - difficulty 取值：beginner / intermediate / advanced。
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: RAG 知识库问答系统
+difficulty: beginner
+covers_skills: [Python, LLM API, Embedding, RAG]
+prerequisites: [Python, Embedding, Prompt Engineering]
+tech_stack: [Python, LangChain, Chroma, nomic-embed-text:latest]
+stage_hint: 学习路线中段，用于把 RAG 检索-增强-生成流程落地为可用的知识问答
+deliverable: 能将一批本地文档切分、向量化并建立索引，支持基于内容的语义问答
+acceptance_criteria:
+  - 能对本地文档完成切分与向量化，并写入向量存储
+  - 提问时能按语义检索出相关片段并据此生成回答
+  - 回答带出处来源，便于核验，减少幻觉
+  - 能评估检索质量，处理切分粒度与召回不准确的问题
+estimated_weeks: 3

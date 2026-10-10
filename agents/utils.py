@@ -46,6 +46,48 @@ def normalize_level(value) -> str:
     return "初级"
 
 
+def resolve_canonical(name, vocabulary) -> str | None:
+    """把技能名归一成词表里的**规范技能名**，只有唯一命中才采用。
+
+    为什么必须要求"唯一"：模型很容易把岗位能力分类标签（如"Agent 与工作流编排"）
+    或别名写法（如"后端服务"）当成技能名。名字里同时沾到多个规范技能时不能猜，
+    否则会把"大模型调用与提示词工程"这类含混说法错判成某一个具体技能。
+
+    未命中或有歧义一律返回 None，交给调用方显式处理（记录、告警、降级），
+    绝不悄悄替换成别的技能。
+
+    `vocabulary` 为 None（词表不可用）时同样返回 None。
+    """
+    text = str(name or "").strip()
+    if not text or vocabulary is None:
+        return None
+    matches = vocabulary.match_detailed(text)
+    if len(matches) != 1:
+        return None
+    return matches[0][0]
+
+
+def build_skill_mapping(names, vocabulary) -> tuple[dict, list]:
+    """批量归一技能名。
+
+    返回 `({原始名: 规范名}, [无法唯一归一的原始名])`，两边都保序去重。
+    "无法唯一归一"包含**没命中**与**有歧义**两种情况，按同一口径记录，
+    不做任何猜测。
+    """
+    mapping: dict[str, str] = {}
+    unmapped: list[str] = []
+    for raw in names or []:
+        name = str(raw or "").strip()
+        if not name or name in mapping or name in unmapped:
+            continue
+        resolved = resolve_canonical(name, vocabulary)
+        if resolved is None:
+            unmapped.append(name)
+        else:
+            mapping[name] = resolved
+    return mapping, unmapped
+
+
 def dedupe_by(items: list, key: str) -> list:
     """按 key 去重（忽略大小写、空格），保留第一次出现的那条。
 

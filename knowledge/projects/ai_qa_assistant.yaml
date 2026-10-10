@@ -1,0 +1,22 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Project 知识库 —— 项目模板：AI 智能问答助手（入门项目，阶段三 v1）
+# 说明：
+#   - covers_skills / prerequisites 中的技能必须来自岗位知识库的规范技能列表
+#     （即 knowledge/skills/ 与 knowledge/jobs/ai-application-engineer.yaml）。
+#   - tech_stack 可能包含 FastAPI 等技术名，但这些不作为新的规范技能。
+#   - difficulty 取值：beginner / intermediate / advanced。
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: AI 智能问答助手
+difficulty: beginner
+covers_skills: [Python, LLM API, Prompt Engineering]
+prerequisites: [Python]
+tech_stack: [Python, 通义千问 qwen2.5:3b]
+stage_hint: 学习路线早期，用于巩固 LLM API 与提示词基础
+deliverable: 可交互的 Web 问答页面或命令行交互程序，能基于提示词设定回答风格与约束
+acceptance_criteria:
+  - 输入问题后能稳定返回符合约束格式的回答
+  - 提示词中加入角色与输出约束，回答符合设定风格
+  - 处理调用失败与超时，给出明确错误提示
+  - 核心脚本数据化，便于扩展与测试
+estimated_weeks: 2

@@ -1,0 +1,71 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Skill 知识库 —— 工程与工程化技能（阶段三 v1）
+# 说明：
+#   - skill 名称必须与 knowledge/jobs/ai-application-engineer.yaml 中的技能名完全一致。
+#   - prerequisites 只能引用知识库中真实存在的规范技能。
+#   - level_guides 的四个等级（入门/初级/中级/高级）必须完整。
+# ═══════════════════════════════════════════════════════════════════════════
+
+- skill: 后端 API 开发
+  category: engineering
+  level_guides:
+    入门: 知道后端 API 负责提供接口，能看懂一个简单的 HTTP 接口示例。
+    初级: 能用轻量框架写简单的 GET/POST 接口，能处理 JSON 请求与响应。
+    中级: 能独立完成后端服务开发，包括接口设计、参数校验、错误处理与日志，会封装可复用模块。
+    高级: 能主导服务架构，处理鉴权、限流、测试、文档与部署，能把业务能力封装成 Agent Skill 或 MCP 工具。
+  prerequisites: [Python]
+  typical_usage: 把 AI 能力、数据服务和业务能力以接口形式暴露给前端或 Agent，是服务落地的关键工程能力。
+  common_pitfalls:
+    - 接口缺少参数校验和统一错误返回，前端与 Agent 难以对接。
+    - 不写日志和异常处理，出问题无法排查。
+    - 把敏感配置硬编码，或接口未做任何鉴权。
+  learning_resources: []
+  estimated_weeks: 3
+
+- skill: 测试与效果评测
+  category: engineering
+  level_guides:
+    入门: 知道测试和评测是保证质量的手段，能写出最简单的断言。
+    初级: 能为核心函数写单元测试，能说明效果评测的基本指标。
+    中级: 能针对 RAG/Agent 设计效果评测，参与建立测试体系，能做异常处理与日志。
+    高级: 能设计可观测性与质量门禁，能对 Agent、RAG 做系统性评测并沉淀指标体系。
+  prerequisites: [Python]
+  typical_usage: 用测试和评测保证 AI 应用质量，涵盖单元测试、效果评测、可观测性与效果专项研究。
+  common_pitfalls:
+    - 只测 happy path，不覆盖异常和边界。
+    - 评测只看一两个样例，没有量化指标。
+    - 把"能跑通"当成"效果达标"，不做回归对比。
+  learning_resources: []
+  estimated_weeks: 2
+
+- skill: Git
+  category: engineering
+  level_guides:
+    入门: 知道 Git 用于版本管理，会 clone、add、commit 等基础操作。
+    初级: 能独立完成日常提交、分支管理与合并，会处理简单冲突。
+    中级: 能规范地组织提交、使用分支策略，理解 rebase 与 merge 的区别，能协作多人项目。
+    高级: 能设计团队协作流程，善用历史管理与回滚，能处理复杂的合并冲突。
+  prerequisites: []
+  typical_usage: 项目代码的版本管理基础，是正式工程开发与协作的必要技能。
+  common_pitfalls:
+    - 把 .env、密钥或中间产物提交进仓库。
+    - 在错误的分支上改代码，或提交信息混乱。
+    - 不拉取最新代码直接改，冲突后处理不当。
+  learning_resources: []
+  estimated_weeks: 1
+
+- skill: Docker
+  category: engineering
+  level_guides:
+    入门: 知道 Docker 用于容器化部署，能看懂一个 Dockerfile。
+    初级: 能写简单的 Dockerfile 构建镜像，能运行与停止容器。
+    中级: 能用 docker-compose 编排多服务，理解镜像分层与数据卷，能解决常见构建问题。
+    高级: 能设计生产级镜像（精简分层、安全、健康检查），能结合 CI/CD 做自动化部署。
+  prerequisites: [Git]
+  typical_usage: 把应用及其依赖容器化，用于构建、分发与部署，是工程化与部署的重要能力。
+  common_pitfalls:
+    - 把构建产物和源码一起打进镜像，镜像又大又乱。
+    - 容器里跑依赖本地绝对路径的代码。
+    - 忽略依赖缓存，每次构建都全量下载。
+  learning_resources: []
+  estimated_weeks: 2

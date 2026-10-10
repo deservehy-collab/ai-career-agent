@@ -1,0 +1,23 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Skill 知识库 —— 框架与工具生态（阶段三 v1）
+# 说明：
+#   - skill 名称必须与 knowledge/jobs/ai-application-engineer.yaml 中的技能名完全一致。
+#   - prerequisites 只能引用知识库中真实存在的规范技能。
+#   - level_guides 的四个等级（入门/初级/中级/高级）必须完整。
+# ═══════════════════════════════════════════════════════════════════════════
+
+- skill: LangChain / LangGraph
+  category: frameworks
+  level_guides:
+    入门: 知道它们是构建 LLM 应用/Agent 工作流的框架，能跑通一个简单例子。
+    初级: 能用框架搭建基础的对话或检索链路，会用现成组件（如 ChatModel、Prompt）。
+    中级: 能设计与状态化 Agent 工作流，会用框架的结构化输出与工具编排能力。
+    高级: 能基于框架设计复杂、可测试、可维护的 Agent/工作流架构，理解框架机理与取舍。
+  prerequisites: [Python, Prompt Engineering]
+  typical_usage: 用框架快速、结构化管理 LLM 调用、检索与 Agent 工作流，是 AI 应用工程化的主流工具。
+  common_pitfalls:
+    - 只会套模板，不理解状态与调用链，出问题无从排查。
+    - 为了用框架而用，把简单的调用过度封装。
+    - 依赖框架内部细节，版本升级后接口变化导致代码失效。
+  learning_resources: []
+  estimated_weeks: 3
