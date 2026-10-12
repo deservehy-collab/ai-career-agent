@@ -8,6 +8,7 @@ class CareerState(TypedDict, total=False):
     user_profile: dict  # 学生个人信息（专业/年级/自述技能/项目经历）
     target_job: str  # 目标岗位
     target_company: str  # 可选：限定岗位知识库检索的公司（不填则按跨公司概览检索）
+    jd_source_id: str  # 可选：精确匹配某一份真实 JD（优先级高于 target_company）
 
     # ---- Profile Agent ----
     user_skills: list  # 学生已掌握技能 [{skill, level, evidence}]
@@ -31,6 +32,9 @@ class CareerState(TypedDict, total=False):
 
     # ---- 汇总 ----
     final_plan: dict
+    # 说明：阶段四的 JD 匹配结论不在这里 —— 工作流没有汇总节点，
+    # 它由 build_final_plan() 现算并放进**返回值**的 "jd_match" 里，
+    # 不写回 state（写了也没人读）。
 
 
 def check_update(update: dict, agent_name: str) -> dict:

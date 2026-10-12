@@ -21,6 +21,14 @@
 唯一会抛异常的情况是 ``target_job`` 缺失：这属于调用方错误，且下游 job 节点
 同样会因此报错，提前在这里拦下来能给出更准确的错误信息。
 
+阶段四补充
+----------
+指定 ``jd_source_id``（精确匹配某一份真实 JD）时，``jd_source_id`` 与可选的
+``target_company`` 会先解析成单一目标：source_id 不存在、该 JD 缺 ``company_slug``、
+公司名无法识别、或两个参数指向不同公司，都属于调用方参数错误，**在 try 之外
+明确报错**，不得吞成普通检索失败。``target_company`` 单独使用时不受影响，
+仍按上面的降级原则处理（这是阶段二以来的既有行为）。
+
 证据 ≠ 学生能力
 ---------------
 ``job_evidence`` 描述的是**岗位（JD）说了什么**，``user_skills`` 描述的是
@@ -30,6 +38,7 @@
 
 from __future__ import annotations
 
+from agents.jd_match import resolve_target
 from agents.retriever import (
     DEFAULT_JOB_ID,
     STATUS_MATCHED,
@@ -70,10 +79,31 @@ def retrieval_node(state: CareerState) -> dict:
 
     company = state.get("target_company")
     company = str(company).strip() if company else None
+    jd_source_id = state.get("jd_source_id")
+    jd_source_id = str(jd_source_id).strip() if jd_source_id else None
+
+    # 阶段四：入口目标解析。
+    #
+    # 只传 target_company（不传 jd_source_id）时**不走解析**：原样透传给 retriever，
+    # 与阶段二逐字一致 —— 公司名无法识别时由 retriever 抛错、下面 except 降级继续。
+    #
+    # 指定了 jd_source_id 时先在 try 之外解析：source_id 不存在、解析不出归属公司、
+    # 或与 target_company 指向不同公司，都属于**调用方参数错误**，必须明确报错，
+    # 不得吞成普通检索失败。
+    if jd_source_id:
+        target = resolve_target(jd_source_id, company)
+        request_company = target["company_slug"]
+        request_source = target["source_id"]
+    else:
+        request_company = company
+        request_source = None
 
     try:
         result = get_retriever().retrieve(
-            RetrieveRequest(query=target_job, company=company, job_id=DEFAULT_JOB_ID)
+            RetrieveRequest(
+                query=target_job, company=request_company, job_id=DEFAULT_JOB_ID,
+                source_id=request_source,
+            )
         )
         evidence = list(result.evidence or [])
         status = result.status

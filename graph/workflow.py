@@ -8,6 +8,7 @@ START → profile → retrieval → job → assessment → learning → project 
 from langgraph.graph import END, START, StateGraph
 
 from agents.assessment_agent import assessment_node
+from agents.jd_match import compute_jd_match, resolve_target
 from agents.job_agent import job_node
 from agents.learning_agent import learning_node
 from agents.profile_agent import profile_node
@@ -58,6 +59,26 @@ def build_final_plan(state: dict) -> dict:
     stages = state.get("learning_plan") or []
     projects = state.get("project_plan") or []
 
+    # 阶段四：真实 JD 定向匹配（确定性汇总，复用 job_evidence / skill_gaps）
+    jd_target = None
+    jd_meta = None
+    company_slug = None
+    try:
+        target = resolve_target(state.get("jd_source_id"), state.get("target_company"))
+        jd_target = target["source_id"]
+        jd_meta = target["jd_meta"]
+        company_slug = target["company_slug"]
+    except Exception as exc:  # 入口参数异常已在 retrieval_node 暴露；这里兜底不中断汇总
+        print(f"[Final Plan] 警告：真实 JD 匹配目标解析失败，按跨公司概览处理（{type(exc).__name__}: {exc}）", flush=True)
+    jd_match = compute_jd_match(
+        skill_gaps=gaps,
+        job_requirements=state.get("job_requirements") or [],
+        evidence=state.get("job_evidence") or [],
+        jd_meta=jd_meta,
+        jd_target=jd_target,
+        company_slug=company_slug,
+    )
+
     return {
         "target_job": state.get("target_job", ""),
         "already_satisfied": [g["skill"] for g in gaps if g["status"] == "已满足"],
@@ -69,4 +90,5 @@ def build_final_plan(state: dict) -> dict:
             if stages
             else "先补齐岗位要求中最关键的技能"
         ),
+        "jd_match": jd_match,
     }

@@ -18,6 +18,18 @@ user_profile = {
 
 target_job = "AI应用开发工程师"
 
+# 阶段四：真实 JD 定向匹配的可选入口目标。
+# - 传 jd_source_id（如 "jd_hundsun_001"）：精确匹配某一份真实 JD，优先级最高；
+# - 传 target_company（如 "恒生电子" 或 "hundsun"）：公司级匹配；
+# - 都不传：保持阶段二以来默认的跨公司概览行为。
+# 两者同时传入时必须归属一致，否则入口解析会明确报错（见 retrieval_agent）。
+jd_source_id = None
+target_company = None  # 例如 "恒生电子" 或 "hundsun" 解析出 hundsun
+extra_input = {k: v for k, v in {
+    "jd_source_id": jd_source_id,
+    "target_company": target_company,
+}.items() if v}
+
 
 def show(title: str, data) -> None:
     print(f"\n{'=' * 10} {title} {'=' * 10}")
@@ -52,6 +64,62 @@ def public_learning_plan(stages: list) -> list:
         for stage in (stages or [])
         if isinstance(stage, dict)
     ]
+
+
+def show_jd_match(match: dict) -> None:
+    """展示阶段四的真实 JD 定向匹配结论（纯展示，复用 jd_match 结果）。"""
+    print(f"\n{'=' * 10} 真实 JD 匹配 {'=' * 10}")
+    if not match:
+        print("（没有 JD 匹配结论）")
+        return
+
+    print(f"总体结论：{match.get('overall', 'unknown')}")
+    print(f"参与匹配 JD 数量：{match.get('matched_jd_count', 0)}")
+    print(f"目标 JD（source_id）：{match.get('jd_target') or '未指定（跨公司概览）'}")
+
+    # 计数口径分三层，不能把"有证据归属数"说成"可判定数"：
+    # 有证据归属 = 归属该目标 + 能回查到证据；可判定 = 其中还能对上能力差距的。
+    judged = match.get("requirement_judged", 0)
+    print(f"有证据归属的岗位要求：{match.get('requirement_total', 0)} 项")
+    print(f"  可判定（计入统计）：{judged} 项")
+    print(f"    - 已满足：{match.get('requirement_satisfied', 0)} 项")
+    print(f"    - 存在差距：{match.get('requirement_shortfall', 0)} 项")
+    print(f"  证据不足（不计入统计，也不进分母）：{match.get('requirement_orphan', 0)} 项")
+
+    # 满足率的分母只能是可判定要求数；分母为 0 时不出百分比
+    rate = match.get("match_rate")
+    if rate is None:
+        print("满足率：无可判定要求，本次不出满足率")
+    else:
+        print(f"满足率：{rate:.0%}（分母 = 可判定要求 {judged} 项）")
+
+    hard_blocks = match.get("hard_blocks") or []
+    if hard_blocks:
+        print(
+            f"硬性缺口候选（{len(hard_blocks)} 项）"
+            f"——supported = 技能名与证据完全同名；partially_supported = 仅别名/语义相关，"
+            f"证据强度弱于前者，不等于完全确认："
+        )
+        for block in hard_blocks:
+            print(
+                f"  - {block.get('skill')}"
+                f"（重要性 {block.get('importance')}，"
+                f"要求等级 {block.get('required_level')}，"
+                f"证据强度 {block.get('evidence_status') or '未知'}）"
+            )
+
+    key_gaps = match.get("key_gaps") or []
+    if key_gaps:
+        print("关键差距（按优先级）：")
+        for gap in key_gaps:
+            print(
+                f"  - {gap.get('skill')}"
+                f"（重要性 {gap.get('importance')}，优先级 {gap.get('priority')}）"
+            )
+
+    warning = match.get("jd_source_warning")
+    if warning:
+        print(f"来源提示：{warning}")
 
 
 def show_retrieval(result: dict) -> None:
@@ -102,6 +170,7 @@ if __name__ == "__main__":
             "user_profile": user_profile,
             "target_job": target_job,
         }
+        | extra_input
     )
 
     show("用户能力", result.get("user_skills", []))
@@ -110,4 +179,8 @@ if __name__ == "__main__":
     show("能力差距", result.get("skill_gaps", []))
     show("学习路线", public_learning_plan(result.get("learning_plan", [])))
     show("项目路线", result.get("project_plan", []))
-    show("最终方案", build_final_plan(result))
+
+    # 汇总只算一次：原计划与 JD 匹配来自同一份结果，避免重复计算
+    final_plan = build_final_plan(result)
+    show("最终方案", final_plan)
+    show_jd_match(final_plan.get("jd_match"))

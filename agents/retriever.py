@@ -357,6 +357,28 @@ def _candidate_k(top_k: int) -> int:
     return max(top_k * 4, 20)
 
 
+def metadata_filter(
+    company_slug: str | None, source_ids=None,
+) -> dict | None:
+    """构造 Chroma metadata filter：公司 + JD 白名单，两者取**交集**。
+
+    ``source_ids`` 用于"只匹配某一份真实 JD"（阶段四）：向量候选必须在数据库侧
+    就被限制在该 JD 范围内，而不是取回来之后再过滤 —— 否则同公司的其他 JD 会先
+    混进候选、再靠后续环节补救。不传 ``source_ids`` 时行为与阶段二完全一致。
+    """
+    allowed = sorted({str(s).strip() for s in (source_ids or ()) if str(s).strip()})
+    conditions: list[dict] = []
+    if company_slug:
+        conditions.append({"company_slug": company_slug})
+    if allowed:
+        conditions.append({"source_id": {"$in": allowed}})
+    if not conditions:
+        return None
+    if len(conditions) == 1:
+        return conditions[0]
+    return {"$and": conditions}
+
+
 # ── 公司识别 ────────────────────────────────────────────────────────────
 def detect_companies(text: str) -> list[str]:
     """从文本中识别出现的公司 slug，按"最长别名优先"匹配，不重复计入同一公司。"""
@@ -403,6 +425,7 @@ class RetrieveRequest:
     job_id: str = DEFAULT_JOB_ID
     top_k: int = DEFAULT_TOP_K
     mode: str = MODE_AUTO
+    source_id: str | None = None
 
 
 @dataclass
@@ -493,10 +516,20 @@ class ChromaVectorStore:
             for m, d in zip(raw.get("metadatas") or [], raw.get("documents") or [])
         ]
 
-    def search(self, query: str, k: int, company_slug: str | None = None) -> list[tuple[dict, float]]:
-        """向量检索，返回 [(record, L2距离)] —— 距离越小越相似。"""
+    def search(
+        self,
+        query: str,
+        k: int,
+        company_slug: str | None = None,
+        source_ids=None,
+    ) -> list[tuple[dict, float]]:
+        """向量检索，返回 [(record, L2距离)] —— 距离越小越相似。
+
+        ``source_ids`` 非空时，Chroma 侧同时按 ``source_id`` 白名单收窄（与公司取交集），
+        保证"只匹配某一份 JD"时向量候选在**进入 `_merge` 之前**就已限定在该 JD 范围内。
+        """
         store = self._get_store()
-        filter_ = {"company_slug": company_slug} if company_slug else None
+        filter_ = metadata_filter(company_slug, source_ids)
         hits = store.similarity_search_with_score(query, k=k, filter=filter_)
         return [(self._to_record(doc.metadata, doc.page_content), float(score)) for doc, score in hits]
 
@@ -618,10 +651,15 @@ class JobKnowledgeRetriever:
         """"同一句原文"的标识：来源 + 原文（不含技能名）。"""
         return (record.get("source_id"), _norm_note(record.get("note")))
 
-    def _safe_search(self, query: str, k: int, company_slug: str | None, errors: list[str]):
-        """向量检索的容错包装：失败不抛出，只记入 diagnostics。"""
+    def _safe_search(self, query: str, k: int, company_slug: str | None,
+                     source_ids, errors: list[str]):
+        """向量检索的容错包装：失败不抛出，只记入 diagnostics。
+
+        ``source_ids`` 原样透传给后端，由后端在**取数时**就限定范围 —— 这里不做
+        事后过滤，避免"先混入再剔除"造成的候选污染。
+        """
         try:
-            return self._vector.search(query, k, company_slug)
+            return self._vector.search(query, k, company_slug, source_ids=source_ids)
         except Exception as exc:  # Ollama 未启动、索引损坏等
             errors.append(f"vector_search_failed: {type(exc).__name__}: {exc}")
             return []
@@ -915,12 +953,25 @@ class JobKnowledgeRetriever:
             )
 
         scope = [r for r in scope if not r.get("job_id") or r.get("job_id") == job_id]
+        # 阶段四扩展：按 source_id 精确定位单份真实 JD。只在显式指定时过滤，
+        # 不指定则完全维持阶段二的检索行为（不跨公司、全量核对等）。
+        requested_source = (request.source_id or "").strip() or None
+        diagnostics["source_id"] = requested_source
+        # 向量检索侧的同一道白名单：不只是过滤 scope，还要让后端在取数时就限定范围
+        allowed_sources = frozenset({requested_source}) if requested_source else None
+        if requested_source:
+            scope = [r for r in scope if r.get("source_id") == requested_source]
         diagnostics["scope_count"] = len(scope)
         diagnostics["sources_included"] = sorted({r.get("source_id") for r in scope if r.get("source_id")})
 
         if not scope:
             diagnostics["reason"] = (
-                f"公司 {company_slug!r} 没有索引记录" if company_slug else f"岗位 {job_id!r} 没有索引记录"
+                f"来源 {requested_source!r} 没有索引记录"
+                if requested_source
+                else (
+                    f"公司 {company_slug!r} 没有索引记录"
+                    if company_slug else f"岗位 {job_id!r} 没有索引记录"
+                )
             )
             return RetrieveResult(
                 status=STATUS_NO_SOURCE, mode=resolved_mode, company_slug=company_slug,
@@ -937,7 +988,7 @@ class JobKnowledgeRetriever:
 
         if terms:
             exact = [r for r in scope if r.get("skill") in terms]
-            vector_hits = self._safe_search(query, top_k, company_slug, errors)
+            vector_hits = self._safe_search(query, top_k, company_slug, allowed_sources, errors)
             if not exact:
                 diagnostics["reason"] = (
                     f"已核对适用范围内全部 {len(scope)} 条记录，未发现技能 {terms} 的明确证据"
@@ -976,7 +1027,7 @@ class JobKnowledgeRetriever:
         # 4a) 有内容单元**完全**没命中 —— 保守判定为未提及，绝不拿无关向量结果当证据。
         #     判据落在"整个单元"上，所以通用词（如 AI）命中不会抵消核心主题的完全未命中。
         if unmatched_units:
-            vector_hits = self._safe_search(query, _candidate_k(top_k), company_slug, errors)
+            vector_hits = self._safe_search(query, _candidate_k(top_k), company_slug, allowed_sources, errors)
             diagnostics["match_kind"] = "term_scan"
             diagnostics["reason"] = (
                 f"已核对适用范围内全部 {len(scope)} 条记录，"
@@ -1039,7 +1090,7 @@ class JobKnowledgeRetriever:
             )
 
         # 6) 有内容词且资料里找得到 —— 语义排序，并合并同源重复
-        vector_hits = self._safe_search(query, _candidate_k(top_k), company_slug, errors)
+        vector_hits = self._safe_search(query, _candidate_k(top_k), company_slug, allowed_sources, errors)
         diagnostics["match_kind"] = "vector_only"
         diagnostics["note"] = (
             "查询中没有技能名，但有能在资料中找到的内容词，结果按向量相似度排序；"
@@ -1066,9 +1117,13 @@ def retrieve(
     job_id: str = DEFAULT_JOB_ID,
     top_k: int = DEFAULT_TOP_K,
     mode: str = MODE_AUTO,
+    source_id: str | None = None,
     retriever: JobKnowledgeRetriever | None = None,
 ) -> RetrieveResult:
     """便捷函数：一次性检索。默认使用真实的 Chroma + Ollama 后端。"""
     engine = retriever if retriever is not None else JobKnowledgeRetriever()
-    request = RetrieveRequest(query=query, company=company, job_id=job_id, top_k=top_k, mode=mode)
+    request = RetrieveRequest(
+        query=query, company=company, job_id=job_id, top_k=top_k, mode=mode,
+        source_id=source_id,
+    )
     return engine.retrieve(request)
