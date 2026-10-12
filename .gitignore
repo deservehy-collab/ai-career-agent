@@ -24,3 +24,6 @@ tests/
 # 本地验收报告与本地文档（仅保留在本地，不进入 GitHub 提交）
 报告路径.json
 *.doc
+
+# 运行数据（阶段五成长记录 runs/growth.json 等，属于本机状态，不入库）
+runs/

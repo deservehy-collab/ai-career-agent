@@ -9,11 +9,19 @@ class CareerState(TypedDict, total=False):
     target_job: str  # 目标岗位
     target_company: str  # 可选：限定岗位知识库检索的公司（不填则按跨公司概览检索）
     jd_source_id: str  # 可选：精确匹配某一份真实 JD（优先级高于 target_company）
+    growth_events: list  # 可选：新学习成果 / 新项目经历（阶段五输入），缺省视为无新成果
 
     # ---- Profile Agent ----
     user_skills: list  # 学生已掌握技能 [{skill, level, evidence}]
     user_strengths: list  # 技术优势
     user_weaknesses: list  # 技术短板
+
+    # ---- Growth Agent（阶段五：动态能力成长）----
+    # 注意：user_skills 仍是**唯一**的"当前能力"真源，growth_node 直接更新它；
+    # 下面三个是快照/追踪/差异，只供展示与回溯，**不参与任何下游计算**。
+    user_skills_before: list  # 本次运行的基线快照（已合并历史成长结果）
+    skill_updates: list  # 逐项等级变化 [{skill, from, to, reason, source}]
+    growth_diff: dict  # 等级 / 缺口 / 匹配率的前后差异
 
     # ---- Retrieval Agent（RAG 岗位知识库，只描述岗位，不是学生能力）----
     job_evidence: list  # 检索到的岗位证据 [{company_slug, skill, requirement_type, context, note, ...}]
@@ -25,6 +33,11 @@ class CareerState(TypedDict, total=False):
 
     # ---- Assessment Agent ----
     skill_gaps: list  # 能力差距
+    # 模型在 assessment 那一次调用的**原始回答**（未经清洗/过滤/回退）：
+    # [{skill, supported_by, gap}]，三个字段原样保存 —— supported_by 允许缺失或为空字符串，
+    # 绝不在这里改写成"无"（那是代码判定环节的事）。
+    # 用途：阶段五的成长前后缺口对比要用**同一批原始回答**跑两次 judge_gaps。
+    assessment_answers: list
 
     # ---- Learning / Project Agent ----
     learning_plan: list

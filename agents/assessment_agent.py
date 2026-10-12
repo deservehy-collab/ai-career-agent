@@ -152,23 +152,18 @@ def _build_gap_schema(skill_names: list):
     return create_model("GapAnalysis", gaps=(list[item_model], Field(description="逐项比对结果")))
 
 
-def assessment_node(state: CareerState) -> dict:
-    """LangGraph 节点：读取 user_skills + job_requirements，写入 skill_gaps。"""
-    user_skills = state.get("user_skills") or []
-    job_requirements = state.get("job_requirements") or []
-    if not user_skills:
-        raise ValueError("state 中缺少 user_skills，无法做能力差距分析")
-    if not job_requirements:
-        raise ValueError("state 中缺少 job_requirements，无法做能力差距分析")
+def judge_gaps(user_skills: list, job_requirements: list, analysis) -> list[dict]:
+    """把模型回答整理成逐项的 skill_gaps —— **纯代码判定，不调模型、不做 IO**。
 
-    skill_names = [s["skill"] for s in user_skills]
-    prompt = PROMPT.format(
-        user_skills=_format_skills(user_skills),
-        job_requirements=_format_requirements(job_requirements),
-        skill_options="、".join(skill_names),
-    )
-    analysis = structured_invoke(prompt, _build_gap_schema(skill_names))
+    单独抽出来的原因：阶段五"重新评估"要拿**同一批模型回答**，对更新前后的两套
+    user_skills 各算一次缺口，用来对比能力提升的效果。判定逻辑与抽出来之前一字未改。
 
+    参数
+    ----
+    user_skills : 学生能力表 [{skill, level, evidence}]，水平只从这里查
+    job_requirements : 岗位要求，遍历以它为准，保证不漏项
+    analysis : structured_invoke 的原始返回，只用到它的 ``gaps`` 列表
+    """
     # 学生水平一律以 Profile Agent 的原数据为准
     student_level = {_norm_name(s["skill"]): s["level"] for s in user_skills}
     # 名字完全一致的，代码直接认定，不给模型出错的机会
@@ -240,6 +235,67 @@ def assessment_node(state: CareerState) -> dict:
     # 优先级降序 → 岗位重要度降序 → 技能名，保证结果稳定可复现
     priority_rank = {"高": 0, "中": 1, "低": 2}
     gaps.sort(key=lambda g: (priority_rank[g["priority"]], -g["importance"], g["skill"]))
+    return gaps
+
+
+def extract_answers(analysis) -> list[dict]:
+    """把模型的**原始回答**转成可序列化的最小结构，只保留三个字段。
+
+    为什么单独抽一个函数、而不塞进 ``judge_gaps``：``growth_agent`` 也在调用
+    ``judge_gaps``，改它的签名或返回值会波及那边。这里只在 assessment 节点里
+    顺手存一份原始回答，判定链路一行不动。
+
+    口径（三条都重要）：
+
+    1. **在清洗之前取** —— 拿到的是模型原话，不是 ``_clean_gap_text`` 回退后的文本；
+    2. **只取 skill / supported_by / gap** —— 其余字段 ``judge_gaps`` 从不读取；
+    3. **原样保存，不做任何改写** —— ``supported_by`` 缺失或为空就留 ``None``/``""``，
+       **绝不在这里写成"无"**（"无"是 judge_gaps 的判定结果，不是模型的回答）。
+    """
+    answers: list[dict] = []
+    for item in getattr(analysis, "gaps", None) or []:
+        answers.append({
+            "skill": _raw_field(item, "skill"),
+            "supported_by": _raw_field(item, "supported_by"),
+            "gap": _raw_field(item, "gap"),
+        })
+    return answers
+
+
+def _raw_field(item, name):
+    """按原值取字段：缺失或 None 保持 None，其余转成字符串，不做"补默认值"。"""
+    value = getattr(item, name, None)
+    return None if value is None else str(value)
+
+
+def assessment_node(state: CareerState) -> dict:
+    """LangGraph 节点：读取 user_skills + job_requirements，写入 skill_gaps。
+
+    模型只负责"语义对应"（本节唯一的一次 LLM 调用），
+    等级 / 状态 / 优先级全部交给 judge_gaps() 里的代码判定。
+    """
+    user_skills = state.get("user_skills") or []
+    job_requirements = state.get("job_requirements") or []
+    if not user_skills:
+        raise ValueError("state 中缺少 user_skills，无法做能力差距分析")
+    if not job_requirements:
+        raise ValueError("state 中缺少 job_requirements，无法做能力差距分析")
+
+    skill_names = [s["skill"] for s in user_skills]
+    prompt = PROMPT.format(
+        user_skills=_format_skills(user_skills),
+        job_requirements=_format_requirements(job_requirements),
+        skill_options="、".join(skill_names),
+    )
+    analysis = structured_invoke(prompt, _build_gap_schema(skill_names))
+
+    # 先留一份模型的原始回答（清洗/过滤/回退之前），供阶段五做成长前后对比用；
+    # 这份留档不参与任何判定，skill_gaps 的计算结果与以往完全一致。
+    answers = extract_answers(analysis)
+
+    gaps = judge_gaps(user_skills, job_requirements, analysis)
 
     log("Assessment Agent")
-    return check_update({"skill_gaps": gaps}, "Assessment Agent")
+    return check_update(
+        {"skill_gaps": gaps, "assessment_answers": answers}, "Assessment Agent"
+    )
