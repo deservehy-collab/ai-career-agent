@@ -1,0 +1,21 @@
+{
+  "name": "ai-career-agent-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI Career Agent 前端（Vue 3 + Vite）—— 职业成长首页 / 岗位分析 / 学习与项目 / 成长记录 / 系统状态",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "vite": "^6.0.7"
+  }
+}

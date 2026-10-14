@@ -1,0 +1,131 @@
+<script setup>
+import { computed } from 'vue'
+
+import AppBadge from './AppBadge.vue'
+import { AGENTS, AGENT_GROUP } from '../utils/agents'
+
+/**
+ * Agent 工作流流程轨。
+ *
+ * 关于"执行状态"的硬约束（后端能力决定，不能凭想象画）
+ * --------------------------------------------------
+ * - 工作流是**纯顺序图、无条件边**（graph/workflow.py 全是 add_edge），7 个节点每次都会执行；
+ * - 后端 run 记录只有四态，**没有任何节点级信息**（backend/jobs.py 的 TaskRecord）。
+ *
+ * 因此：
+ *   · 运行中 → 只在**整条轨**上显示不确定态，**不给任何单个节点标"正在执行"**；
+ *   · 成功后 → 用 summarizeWorkflow(result) 的**真实产出计数**回填到各节点；
+ *   · 失败   → 只标"执行中断"，**不把错误归因到某个节点**（后端只回一个错误字符串）；
+ *   · 字段缺失 → 中性说明，不推测该节点失败或降级。
+ */
+const props = defineProps({
+  /** summarizeWorkflow(result) 的结果；null 表示还没有结果 */
+  summary: { type: Object, default: null },
+  /** 运行状态：idle / queued / running / succeeded / failed */
+  status: { type: String, default: 'idle' },
+})
+
+const emit = defineEmits(['navigate'])
+
+const isRunning = computed(() => props.status === 'queued' || props.status === 'running')
+const isInterrupted = computed(() => props.status === 'failed')
+
+/**
+ * 单个节点的产出摘要；没有结果时返回 null（节点整体呈中性，不显示任何产出）。
+ * present === false 表示"结果里根本没有该节点的产出字段"——一无所知，不能说它失败或降级。
+ */
+function outputOf(agent) {
+  const item = props.summary?.[agent.node]
+  if (!item) return null
+
+  if (item.present === false) {
+    return { text: '无该节点数据', tone: 'muted', note: item.note || '' }
+  }
+
+  return {
+    text: `${item.count} ${agent.outputLabel}`,
+    tone: item.degraded ? 'warn' : item.count > 0 ? 'ok' : 'muted',
+    note: item.note || '',
+  }
+}
+
+/** 预计算每个节点要渲染的全部内容，模板里不再重复计算。 */
+const nodes = computed(() =>
+  AGENTS.map((agent) => {
+    const group = AGENT_GROUP[agent.group]
+    return {
+      ...agent,
+      colorStyle: { '--agent-color': group.color, '--agent-soft': group.soft },
+      output: outputOf(agent),
+      tip: `${agent.source}\n\n${agent.duty}`,
+    }
+  }),
+)
+
+function goTo(agent) {
+  if (!props.summary) return
+  const target = document.getElementById(agent.anchor)
+  if (!target) return
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  emit('navigate', agent.node)
+}
+</script>
+
+<template>
+  <section class="card">
+    <div class="card-head">
+      <h2>
+        Agent 工作流
+        <span class="sub">7 个节点顺序执行</span>
+      </h2>
+      <AppBadge v-if="isRunning" text="执行中" tone="primary" />
+      <AppBadge v-else-if="isInterrupted" text="执行中断" tone="danger" />
+      <AppBadge v-else-if="summary" text="已完成" tone="ok" />
+      <AppBadge v-else text="待运行" tone="muted" />
+    </div>
+
+    <div class="card-body">
+      <div class="agent-rail" :class="{ 'is-running': isRunning, 'is-interrupted': isInterrupted }">
+        <button
+          v-for="node in nodes"
+          :key="node.node"
+          type="button"
+          class="agent-node"
+          :class="{ 'is-idle': !summary, 'is-degraded': node.output?.tone === 'warn' }"
+          :style="node.colorStyle"
+          :disabled="!summary"
+          :title="node.tip"
+          @click="goTo(node)"
+        >
+          <span class="agent-node-top">
+            <span class="agent-tag-num">{{ node.order }}</span>
+            <span class="agent-node-name">{{ node.displayName }}</span>
+          </span>
+
+          <span class="agent-node-duty">{{ node.duty }}</span>
+
+          <template v-if="node.output">
+            <span class="agent-node-out">
+              <AppBadge :text="node.output.text" :tone="node.output.tone" />
+            </span>
+            <span v-if="node.output.note" class="agent-node-note">{{ node.output.note }}</span>
+          </template>
+        </button>
+      </div>
+
+      <div v-if="isRunning" class="notice notice-info" style="margin: 12px 0 0">
+        后台正按顺序执行全部 7 个节点。后端只提供「排队 / 执行中 / 完成 / 失败」四种**整体**状态，
+        没有单节点进度信息，因此这里不标记任何节点为"正在执行"。
+      </div>
+
+      <div v-else-if="isInterrupted" class="notice notice-danger" style="margin: 12px 0 0">
+        执行中断。后端只返回一条错误信息，**无法定位是哪个节点失败的**，
+        因此这里不指向任何具体节点。错误详情见右侧进度卡。
+      </div>
+
+      <p v-else-if="summary" class="faint" style="margin: 12px 0 0">
+        点击任一节点可跳转到它在结果区对应的卡片。
+      </p>
+    </div>
+  </section>
+</template>

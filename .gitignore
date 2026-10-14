@@ -19,6 +19,8 @@ knowledge/index/
 # 注意：本规则只对**未跟踪**文件生效；tests/test_retriever.py 与
 # tests/test_job_agent_evidence.py 是 v1.1.0 已入库的跟踪文件，仍会被 git add 带上。
 # 因此后续提交必须显式指定文件，不要用 git add -A。
+#
+# 测试文件一律不入库（仅保留在本地）
 tests/
 
 # 本地验收报告与本地文档（仅保留在本地，不进入 GitHub 提交）
@@ -27,3 +29,6 @@ tests/
 
 # 运行数据（阶段五成长记录 runs/growth.json 等，属于本机状态，不入库）
 runs/
+
+# 前端依赖（web/ 是 Vue 3 + Vite 前端根目录；构建产物 web/dist/ 已由上面的 dist/ 规则覆盖）
+web/node_modules/
