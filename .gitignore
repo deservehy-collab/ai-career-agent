@@ -32,3 +32,6 @@ runs/
 
 # 前端依赖（web/ 是 Vue 3 + Vite 前端根目录；构建产物 web/dist/ 已由上面的 dist/ 规则覆盖）
 web/node_modules/
+
+# 手工删除数据前的备份夹（含 users 表快照的密码哈希与本机画像，绝不入库）
+_已删除备份/

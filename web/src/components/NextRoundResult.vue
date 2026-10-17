@@ -93,7 +93,7 @@ const isShortCircuit = computed(
     <div v-for="(warn, i) in r.warnings || []" :key="i" class="notice notice-warn">{{ warn }}</div>
 
     <div v-if="isShortCircuit" class="notice notice-info" style="margin-top: 12px; margin-bottom: 0">
-      本次没有待处理成果，后端直接返回，**未重跑流水线**，因此没有新的学习 / 项目计划。
+      本次没有待处理成果，后端直接返回，<strong>未重跑流水线</strong>，因此没有新的学习 / 项目计划。
     </div>
     <p v-else class="faint" style="margin-bottom: 0">
       三项互相独立：轮次建了但成长没写、或成长写了但轮次没存，都是可能出现的<strong>部分成功</strong>，

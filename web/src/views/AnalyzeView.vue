@@ -246,7 +246,9 @@ function handleReset() {
           <button v-if="analysis.hasResult || analysis.errorMessage" class="btn" @click="handleReset">
             清空结果
           </button>
-          <span class="faint">分析为只读操作，不会写入任何成长或任务记录。</span>
+          <span class="faint">
+            分析不写成长历史；但首次分析会把产出的学习 / 项目计划存成第 1 轮任务（runs/loop.json）。
+          </span>
         </div>
       </div>
     </section>
@@ -267,6 +269,25 @@ function handleReset() {
           :error-kind="analysis.errorKind"
           title="分析进度"
         />
+
+        <!--
+          结果还没回来时的占位。后端只提供排队/运行中/成功/失败四态，**没有进度百分比**，
+          所以这里只有灰条和一句说明：不画假进度，也不给任何单个节点标状态。
+        -->
+        <template v-if="analysis.isRunning && !result">
+          <p class="faint sk-note">
+            七个节点跑完后，结论摘要、能力画像、岗位要求与差距、学习路线会依次出现在下面。
+          </p>
+          <div class="sk-stack" aria-hidden="true">
+            <div v-for="block in 3" :key="block" class="card sk-card">
+              <div class="sk-bar sk-title" />
+              <div class="sk-bar sk-line" />
+              <div class="sk-bar sk-line" />
+              <div class="sk-bar sk-line" />
+              <div class="sk-bar sk-line" />
+            </div>
+          </div>
+        </template>
 
         <template v-if="result">
           <!-- 汇总：final_plan 由图后的确定性汇总得出，不属于任一 Agent 节点 -->

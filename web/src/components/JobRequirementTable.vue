@@ -124,7 +124,7 @@ function levelQuote(item) {
 
       <p v-if="requirements.length" class="faint" style="margin: 12px 0 0">
         点击 RAG 证据列的编号（如 E02），可跳转到下方「RAG 检索证据」中的对应原文。
-        「模型补充（无知识库证据）」表示该要求**没有**知识库证据支撑，仅由模型给出。
+        「模型补充（无知识库证据）」表示该要求<strong>没有</strong>知识库证据支撑，仅由模型给出。
       </p>
     </div>
   </section>

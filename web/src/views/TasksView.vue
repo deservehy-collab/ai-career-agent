@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 
 import AgentTag from '../components/AgentTag.vue'
 import AppBadge from '../components/AppBadge.vue'
@@ -80,12 +80,22 @@ async function load() {
 
 onMounted(load)
 
+/** 弹层打开前所在的元素：关闭后把焦点还回去，键盘用户不会掉回页首。 */
+let lastFocused = null
+
 function openComplete(task) {
+  lastFocused = document.activeElement
   completingTask.value = task
   evidenceText.value = ''
   evidenceError.value = ''
   submitError.value = ''
   submitResult.value = null
+  nextTick(() => document.getElementById('tv-evidence')?.focus())
+}
+
+function restoreFocus() {
+  nextTick(() => lastFocused?.focus?.())
+  lastFocused = null
 }
 
 function closeComplete() {
@@ -93,6 +103,7 @@ function closeComplete() {
   evidenceText.value = ''
   evidenceError.value = ''
   submitError.value = ''
+  restoreFocus()
 }
 
 /** 与后端 StringConstraints(strip_whitespace, min_length=1, max_length=5000) 对齐。 */
@@ -124,6 +135,7 @@ async function submit() {
     submitResult.value = await completeTask(completingTask.value.task_id, body)
     completingTask.value = null
     evidenceText.value = ''
+    restoreFocus()
     await load()
   } catch (error) {
     submitError.value = error?.message || '提交失败'
@@ -176,9 +188,15 @@ async function submit() {
 
       <!-- 提交弹层 -->
       <div v-if="completingTask" class="modal-backdrop" @click.self="closeComplete">
-        <div class="modal">
+        <div
+          class="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tv-modal-title"
+          @keydown.esc="closeComplete"
+        >
           <div class="modal-head">
-            <h2>
+            <h2 id="tv-modal-title">
               提交完成证据
               <span class="sub mono">{{ completingTask.task_id }}</span>
             </h2>
@@ -210,7 +228,7 @@ async function submit() {
 
             <div class="notice notice-info" style="margin-bottom: 0">
               提交后会同时得到三样东西：<strong>任务完成记录</strong>（真正落盘）、
-              <strong>成长成果</strong>（可能构不成）、<strong>技能升级预览</strong>（**不会立刻写入成长历史**）。
+              <strong>成长成果</strong>（可能构不成）、<strong>技能升级预览</strong>（不会立刻写入成长历史）。
             </div>
           </div>
           <div class="modal-foot">
@@ -255,7 +273,7 @@ async function submit() {
             </div>
           </div>
           <div class="card-body">
-            <div class="btn-row">
+            <div class="round-tabs" role="group" aria-label="按轮次筛选任务">
               <button
                 class="btn"
                 :class="{ 'btn-primary': selectedRound === null }"
@@ -273,7 +291,7 @@ async function submit() {
                 第 {{ round.round }} 轮（{{ round.completed_count }}/{{ round.task_count }}）
               </button>
             </div>
-            <p class="faint" style="margin: 10px 0 0">
+            <p class="faint round-tabs-hint">
               目标岗位：
               {{ (rounds.find((r) => r.round === (selectedRound ?? latestRoundNo)) || {}).target_job || '未记录' }}
             </p>

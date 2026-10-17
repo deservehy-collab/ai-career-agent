@@ -11,6 +11,13 @@
 
 export const PROFILE_KEY = 'career-agent:profile'
 export const LAST_SKILLS_KEY = 'career-agent:last-skills'
+export const TOKEN_KEY = 'career-agent:auth-token'
+export const USER_KEY = 'career-agent:auth-user'
+/**
+ * AI 助手的**当前会话**（单会话、非历史归档）：
+ * 与画像同口径 —— 后端没有聊天表，只存在这台浏览器里，可随时清空。
+ */
+export const CHAT_SESSION_KEY = 'career-agent:chat-session'
 
 /** localStorage 不可用时（隐私模式 / 被禁用）也不能让页面崩掉。 */
 function safeStorage() {
@@ -61,6 +68,39 @@ export function removeKey(key) {
   } catch {
     /* 忽略 */
   }
+}
+
+// ── 认证：token 与登录用户 ────────────────────────────────────────────
+// token 是裸字符串（不加 JSON 引号），方便 client.js 在 pinia 初始化之前
+// 也能直接读取并附加到请求头。
+
+export function getAuthToken() {
+  const storage = safeStorage()
+  if (!storage) return null
+  try {
+    return storage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setAuthToken(token) {
+  const storage = safeStorage()
+  if (!storage) return false
+  try {
+    storage.setItem(TOKEN_KEY, token)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const getStoredUser = () => readJson(USER_KEY, null)
+export const setStoredUser = (user) => writeJson(USER_KEY, user)
+
+export function clearAuthStorage() {
+  removeKey(TOKEN_KEY)
+  removeKey(USER_KEY)
 }
 
 /** 把多行 / 顿号 / 逗号分隔的文本解析成去重后的字符串数组。 */

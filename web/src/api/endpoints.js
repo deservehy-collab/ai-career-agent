@@ -5,6 +5,20 @@
 
 import { api } from './client'
 
+// ── 认证 ──────────────────────────────────────────────────────────────
+
+/** `POST /api/auth/register` → 201 {token, token_type, user} */
+export const register = (body) => api.post('/auth/register', body)
+
+/** `POST /api/auth/login` → {token, token_type, user}；401 用户名或密码错误 */
+export const login = (body) => api.post('/auth/login', body)
+
+/** `GET /api/auth/me` → {id, username, created_at}（需 Bearer token） */
+export const getMe = (options) => api.get('/auth/me', options)
+
+/** `POST /api/auth/logout` → {ok:true}。JWT 无状态，退出以前端丢弃 token 为准 */
+export const logout = () => api.post('/auth/logout')
+
 /** `GET /api/health` → {status, ollama, index, knowledge, stores, config} */
 export const getHealth = (options) => api.get('/health', options)
 

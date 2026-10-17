@@ -114,12 +114,12 @@ function goTo(agent) {
       </div>
 
       <div v-if="isRunning" class="notice notice-info" style="margin: 12px 0 0">
-        后台正按顺序执行全部 7 个节点。后端只提供「排队 / 执行中 / 完成 / 失败」四种**整体**状态，
+        后台正按顺序执行全部 7 个节点。后端只提供「排队 / 执行中 / 完成 / 失败」四种<strong>整体</strong>状态，
         没有单节点进度信息，因此这里不标记任何节点为"正在执行"。
       </div>
 
       <div v-else-if="isInterrupted" class="notice notice-danger" style="margin: 12px 0 0">
-        执行中断。后端只返回一条错误信息，**无法定位是哪个节点失败的**，
+        执行中断。后端只返回一条错误信息，<strong>无法定位是哪个节点失败的</strong>，
         因此这里不指向任何具体节点。错误详情见右侧进度卡。
       </div>
 

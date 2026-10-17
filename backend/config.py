@@ -26,6 +26,8 @@ __all__ = [
     "SKILLS_DIR", "PROJECTS_DIR",
     "CHAT_MODEL", "EMBEDDING_MODEL", "OLLAMA_BASE_URL", "OLLAMA_TAGS_PATH",
     "HOST", "PORT", "CORS_ORIGINS", "EVIDENCE_MAX_LENGTH", "TASK_WORKERS",
+    "AUTH_DB_PATH", "JWT_SECRET_PATH", "JWT_ALGORITHM", "JWT_TTL_HOURS",
+    "USERNAME_MIN_LENGTH", "USERNAME_MAX_LENGTH", "PASSWORD_MIN_LENGTH",
 ]
 
 # ── 路径 ────────────────────────────────────────────────────────────────
@@ -62,3 +64,15 @@ EVIDENCE_MAX_LENGTH = 5000
 # 读-改-写只在进程内串行安全（见 tests/test_readonly_boundary.py），
 # 且分析链路的成长存储隔离会临时改写进程级全局 store。
 TASK_WORKERS = 1
+
+# ── 认证（登录 / 用户数据库）─────────────────────────────────────────────
+# SQLite 与 JWT 密钥都放在 runs/ 下：那里本就是"可再生成的运行数据"目录，
+# 删掉库文件最多是重新注册，不会伤到 knowledge/ 与业务代码。
+AUTH_DB_PATH = RUNS_DIR / "app.db"
+JWT_SECRET_PATH = RUNS_DIR / "jwt_secret.key"
+JWT_ALGORITHM = "HS256"
+JWT_TTL_HOURS = 24
+
+USERNAME_MIN_LENGTH = 2
+USERNAME_MAX_LENGTH = 32
+PASSWORD_MIN_LENGTH = 6

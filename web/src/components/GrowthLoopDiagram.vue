@@ -38,14 +38,14 @@ const DEFAULT_STAGES = [
   {
     key: 'practice',
     title: '⑤ 实践反馈',
-    note: '待实现（F2：学习与项目页）',
-    status: 'pending',
+    note: '在「学习与项目」页提交完成证据，成果进入待处理列表',
+    status: 'ready',
   },
   {
     key: 'next-round',
     title: '⑥ 下一轮成长规划',
-    note: '待实现（F3：成长记录页）',
-    status: 'pending',
+    note: '在成长记录页生成下一轮计划，成果这时才写入成长历史',
+    status: 'ready',
   },
 ]
 

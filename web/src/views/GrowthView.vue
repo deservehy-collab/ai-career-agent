@@ -295,7 +295,7 @@ async function submitManualEvent() {
               </article>
 
               <p class="faint" style="margin: 12px 0 0">
-                这些成果**还没有**进入成长历史。点击下方「生成下一轮」时，
+                这些成果<strong>还没有</strong>进入成长历史。点击下方「生成下一轮」时，
                 它们才会交给 growth_node 走正式写入路径并升级技能。
               </p>
             </div>
@@ -349,13 +349,42 @@ async function submitManualEvent() {
                   :class="manual.kind !== 'learning' && 'btn-ghost'"
                   :disabled="manual.submitting"
                   @click="manual.kind = 'learning'"
-                >📖 学习成果</button>
+                >
+                  <svg
+                    class="btn-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 7v14" />
+                    <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
+                  </svg>
+                  学习成果
+                </button>
                 <button
                   class="btn"
                   :class="manual.kind !== 'project' && 'btn-ghost'"
                   :disabled="manual.submitting"
                   @click="manual.kind = 'project'"
-                >🛠️ 项目成果</button>
+                >
+                  <svg
+                    class="btn-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M14.7 6.3a3.9 3.9 0 0 0 5.1 5.1L15 16.2a5 5 0 0 1-6.2 3.5l2.4-2.4-3.5-3.5-2.4 2.4A5 5 0 0 1 8.8 10Z" />
+                  </svg>
+                  项目成果
+                </button>
               </div>
             </div>
 

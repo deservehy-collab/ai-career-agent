@@ -47,7 +47,7 @@ const KIND_LETTER = { learning: '学习', project: '项目' }
       </div>
     </div>
 
-    <div v-else class="btn-row" style="margin-top: 10px">
+    <div v-else class="btn-row task-actions">
       <button
         class="btn btn-primary"
         :disabled="disabled || pendingId === task.task_id"

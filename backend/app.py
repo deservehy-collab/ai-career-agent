@@ -5,6 +5,7 @@
 ======================  ==========================================  ==================
 方法 / 路径              作用                                        写盘？
 ======================  ==========================================  ==================
+POST /api/chat/stream  AI 助手流式对话（SSE，只调本地模型）          ❌ 不写业务数据
 POST /api/analyze        只读分析（202 + run_id）                     ❌ 只读
 GET  /api/runs/{id}      查后台运行状态（排队/成功/失败 + 错误）        ❌ 只读
 POST /api/tasks/{id}/complete  登记任务完成 + 升级预览               ✅ 只写 loop.json
@@ -33,6 +34,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from agents.loop_store import TASK_STATUSES
 from backend import config, services
 from backend.analyze import run_workflow
+from backend.auth import get_current_user, router as auth_router
+from backend.chat import router as chat_router
 from backend.deps import create_stores, create_task_manager
 from backend.jobs import STATUS_QUEUED, TaskManager
 from backend.schemas import (
@@ -42,9 +45,17 @@ from backend.services import Stores
 
 __all__ = ["app"]
 
+# 鉴权：除 /api/auth/* 与 /api/health（登录页体检用）外，所有业务接口都要求
+# Bearer token。``Depends(get_current_user)`` 可被测试全局覆盖（tests/conftest.py）。
+auth_required = [Depends(get_current_user)]
+
 app = FastAPI(
     title="AI Career Agent API",
-    version="1.0.0",
+    version="1.1.0",
+    # 交互式文档默认关闭：接口已要求登录，Swagger 页面本身没有鉴权入口。
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
     description=(
         "AI 大学生成长 / 就业智能规划系统的 Web 接口层。"
         "业务逻辑全部复用现有六阶段实现（agents/ 与 graph/），本层只做适配。"
@@ -59,6 +70,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 认证路由：/api/auth/register|login|me|logout（register/login 公开，me/logout 自带鉴权）
+app.include_router(auth_router)
+
+# AI 助手聊天路由：/api/chat/stream（SSE 流式）。
+# 鉴权与业务接口同口径（可被 tests/conftest.py 覆盖），但**不接入 TaskManager**：
+# 聊天是一次直连本地模型的流式请求，与七节点规划流水线、两个 store 完全无关。
+app.include_router(chat_router, dependencies=auth_required)
+
 
 # ── 健康检查 ────────────────────────────────────────────────────────────
 @app.get("/api/health", tags=["system"], summary="系统状态")
@@ -68,7 +87,7 @@ def get_health(stores: Stores = Depends(create_stores)) -> dict:
 
 
 # ── 分析（只读，异步）─────────────────────────────────────────────────────
-@app.post("/api/analyze", status_code=202, tags=["analysis"], summary="发起岗位分析")
+@app.post("/api/analyze", status_code=202, tags=["analysis"], summary="发起岗位分析", dependencies=auth_required)
 def post_analyze(
     payload: AnalyzeRequest,
     manager: TaskManager = Depends(create_task_manager),
@@ -84,7 +103,7 @@ def post_analyze(
     return {"status": STATUS_QUEUED, "run_id": run_id, "kind": "analyze"}
 
 
-@app.post("/api/analyze-and-save", status_code=202, tags=["analysis"], summary="分析并保存第一轮任务")
+@app.post("/api/analyze-and-save", status_code=202, tags=["analysis"], summary="分析并保存第一轮任务", dependencies=auth_required)
 def post_analyze_and_save(
     payload: AnalyzeRequest,
     manager: TaskManager = Depends(create_task_manager),
@@ -101,7 +120,7 @@ def post_analyze_and_save(
     return {"status": STATUS_QUEUED, "run_id": run_id, "kind": "analyze_and_save"}
 
 
-@app.get("/api/runs/{run_id}", tags=["system"], summary="查询后台运行状态")
+@app.get("/api/runs/{run_id}", tags=["system"], summary="查询后台运行状态", dependencies=auth_required)
 def get_run(run_id: str, manager: TaskManager = Depends(create_task_manager)) -> dict:
     """查一次后台运行的排队 / 成功 / 失败状态、错误信息与结果。
 
@@ -114,7 +133,7 @@ def get_run(run_id: str, manager: TaskManager = Depends(create_task_manager)) ->
 
 
 # ── 任务完成（只写 loop.json）──────────────────────────────────────────────
-@app.post("/api/tasks/{task_id}/complete", tags=["growth"], summary="提交任务完成证据")
+@app.post("/api/tasks/{task_id}/complete", tags=["growth"], summary="提交任务完成证据", dependencies=auth_required)
 def post_task_complete(
     task_id: str,
     payload: CompleteTaskRequest,
@@ -141,13 +160,13 @@ def post_task_complete(
 
 
 # ── 待处理成长成果（只读）──────────────────────────────────────────────────
-@app.get("/api/growth/pending", tags=["growth"], summary="查询待处理成长成果")
+@app.get("/api/growth/pending", tags=["growth"], summary="查询待处理成长成果", dependencies=auth_required)
 def get_pending(stores: Stores = Depends(create_stores)) -> dict:
     """已完成、但还没交给成长节点的成果。**逐字节只读。**"""
     return services.list_pending(stores)
 
 
-@app.post("/api/growth/manual-event", tags=["growth"], summary="手动补录一条成长成果")
+@app.post("/api/growth/manual-event", tags=["growth"], summary="手动补录一条成长成果", dependencies=auth_required)
 def post_manual_event(
     payload: ManualGrowthEventRequest,
     stores: Stores = Depends(create_stores),
@@ -174,7 +193,7 @@ def post_manual_event(
 
 
 # ── 下一轮规划（唯一允许写成长历史）─────────────────────────────────────────
-@app.post("/api/growth/next-round", status_code=202, tags=["growth"], summary="生成下一轮成长计划")
+@app.post("/api/growth/next-round", status_code=202, tags=["growth"], summary="生成下一轮成长计划", dependencies=auth_required)
 def post_next_round(
     payload: NextRoundRequest | None = None,
     manager: TaskManager = Depends(create_task_manager),
@@ -198,7 +217,7 @@ def post_next_round(
 
 
 # ── 只读查询 ────────────────────────────────────────────────────────────
-@app.get("/api/tasks", tags=["growth"], summary="查询轮次与任务清单")
+@app.get("/api/tasks", tags=["growth"], summary="查询轮次与任务清单", dependencies=auth_required)
 def get_tasks(
     round_no: int | None = Query(default=None, description="只看某一轮"),
     status: str | None = Query(default=None, description=f"任务状态，可选 {TASK_STATUSES}"),
@@ -211,13 +230,13 @@ def get_tasks(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@app.get("/api/growth/history", tags=["growth"], summary="查询成长历史")
+@app.get("/api/growth/history", tags=["growth"], summary="查询成长历史", dependencies=auth_required)
 def get_growth_history(stores: Stores = Depends(create_stores)) -> dict:
     """返回真正落盘的成长历史与最新确认能力。只读，损坏时如实带出 warning。"""
     return services.growth_history(stores)
 
 
-@app.get("/api/knowledge/jds", tags=["knowledge"], summary="查询真实 JD 元信息")
+@app.get("/api/knowledge/jds", tags=["knowledge"], summary="查询真实 JD 元信息", dependencies=auth_required)
 def get_jds() -> dict:
     """列出 knowledge/jd 下所有真实 JD 的元信息，供前端选择匹配目标。只读。"""
     return services.list_jds()

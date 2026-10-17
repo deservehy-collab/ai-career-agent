@@ -11,7 +11,17 @@
  * 三种形态都要能读成一句人话，否则界面上会冒出 [object Object]。
  */
 
+import { getAuthToken, clearAuthStorage } from '../utils/storage'
+
 const BASE = '/api'
+
+/** 登录态失效后跳转前，避免在登录/注册页原地打转。 */
+export function redirectToLogin() {
+  const { pathname, search } = window.location
+  if (pathname === '/login' || pathname === '/register') return
+  const redirect = encodeURIComponent(pathname + search)
+  window.location.assign(`/login?redirect=${redirect}`)
+}
 
 /** 后端连不上（fetch 直接 reject）时用的状态码，区别于后端返回的 4xx/5xx。 */
 export const NETWORK_ERROR_STATUS = 0
@@ -40,7 +50,7 @@ export class ApiError extends Error {
 }
 
 /** 把后端的 detail 折成一句可读文本。 */
-function describeDetail(detail) {
+export function describeDetail(detail) {
   if (detail == null) return ''
   if (typeof detail === 'string') return detail
 
@@ -83,6 +93,9 @@ async function readBody(response) {
 async function request(path, { method = 'GET', body, signal } = {}) {
   const init = { method, headers: {}, signal }
 
+  const token = getAuthToken()
+  if (token) init.headers.Authorization = `Bearer ${token}`
+
   if (body !== undefined) {
     init.headers['Content-Type'] = 'application/json'
     init.body = JSON.stringify(body)
@@ -104,6 +117,12 @@ async function request(path, { method = 'GET', body, signal } = {}) {
   const payload = await readBody(response)
 
   if (!response.ok) {
+    // 业务接口的 401 = token 缺失/过期/无效：清掉本地登录态并回登录页。
+    // /auth/ 自身的 401（比如密码错误）属于正常业务反馈，不能清登录态。
+    if (response.status === 401 && !path.startsWith('/auth/')) {
+      clearAuthStorage()
+      redirectToLogin()
+    }
     const detail = payload && typeof payload === 'object' ? payload.detail : payload
     const described = describeDetail(detail)
     const fallback = {
