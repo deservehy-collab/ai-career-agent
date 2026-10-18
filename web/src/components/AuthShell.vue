@@ -1,15 +1,10 @@
 <script setup>
-import { computed, onMounted } from 'vue'
-
-import { AGENTS, AGENT_GROUP } from '../utils/agents'
-import { useHealthStore } from '../stores/health'
-
 /**
  * 认证页骨架：左侧品牌区 + 右侧表单区。
  *
- * 左栏只讲项目**已经做到**的事（七节点工作流、RAG 证据、本地模型），
- * 底部那行状态是真调 `/api/health`（公开接口）拿到的结果；
- * 拿不到就显示「未连接」，不写死一个绿色「就绪」。
+ * 品牌区只回答使用者真正关心的两件事 —— 这是一个什么平台、登录后能干什么，
+ * 用大白话说清楚，不摆工作流节点、源码路径、系统健康探测这类实现细节。
+ * 整页纯静态、不发任何请求。
  */
 defineProps({
   title: { type: String, required: true },
@@ -18,53 +13,36 @@ defineProps({
   badgeIcon: { type: String, default: '' },
 })
 
-const health = useHealthStore()
+const intro =
+  '面向大学生与应届生的 AI 求职规划平台：帮你想清楚方向、补齐能力差距，再把计划真正做完。'
 
-onMounted(() => {
-  if (!health.data && !health.loading) health.refresh()
-})
-
-// 流水线图的数据全部来自 utils/agents.js，而它逐字对应 graph/workflow.py 的 ORDER：
-// 节点名、执行顺序、四色族都不是这张图现编的。
-const nodes = AGENTS.map((agent) => ({
-  key: agent.node,
-  label: agent.shortName,
-  name: agent.displayName,
-  color: AGENT_GROUP[agent.group].color,
-}))
-
-const groups = Object.entries(AGENT_GROUP).map(([key, value]) => ({ key, label: value.label, color: value.color }))
-
-const pillars = [
+// 登录后能干什么 —— 全部对应确实存在的功能页面，不夸大。
+const capabilities = [
   {
-    key: 'agents',
-    title: '七节点多 Agent 流水线',
-    desc: '个人画像 → 岗位要求 → 技能差距 → 学习路线 → 项目建议，一次跑完整条链路。',
-    icon: 'M12 3v4M12 17v4M5 12h4M15 12h4M8 8l8 8M16 8l-8 8',
+    key: 'ask',
+    title: '随时问 AI 助手',
+    desc: '岗位方向、学习顺序、简历与面试，想到就问。',
+    icon: 'M4 5h16v10H9l-5 4z M8 9h8 M8 12h5',
   },
   {
-    key: 'rag',
-    title: 'RAG 知识库，结论可溯源',
-    desc: '岗位要求逐条来自真实招聘 JD 的向量检索，附上原文出处而不是编造。',
-    icon: 'M6 3h9l3 3v15H6zM9 9h6M9 13h6M9 17h4',
+    key: 'plan',
+    title: '一键生成求职规划',
+    desc: '岗位要求、能力差距、学习路线与项目建议，一次给全。',
+    icon: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M16 8l-2 6-6 2 2-6z',
   },
   {
-    key: 'local',
-    title: '模型跑在本机',
-    desc: '对话与推理由本地 Ollama 完成，简历与画像数据不出这台机器。',
-    icon: 'M3 5h18v11H3zM8 20h8M12 16v4',
+    key: 'execute',
+    title: '照着清单去执行',
+    desc: '把规划拆成可完成的学习与项目任务，边做边打卡。',
+    icon: 'M9 6h11 M9 12h11 M9 18h11 M4 6l1.4 1.4L8 4.8 M4 12l1.4 1.4L8 10.8 M4 18l1.4 1.4L8 16.8',
+  },
+  {
+    key: 'grow',
+    title: '看见自己的成长',
+    desc: '记录每一次完成，等级与下一轮计划随进度更新。',
+    icon: 'M3 17l6-6 4 4 8-9 M21 6h-5 M21 6v5',
   },
 ]
-
-const status = computed(() => {
-  const data = health.data
-  if (health.loading && !data) return { dot: 'dot-warn', text: '正在检测本地服务…' }
-  if (health.unreachable) return { dot: 'dot-danger', text: '后端未连接：请确认 FastAPI 已在 127.0.0.1:8000 启动' }
-  if (!data) return { dot: 'dot-warn', text: '服务状态未知' }
-  const model = data.config?.chat_model
-  if (data.status === 'ok') return { dot: 'dot-ok', text: model ? `后端与本地模型已就绪 · ${model}` : '后端与本地模型已就绪' }
-  return { dot: 'dot-warn', text: '后端在线，但部分能力降级' }
-})
 </script>
 
 <template>
@@ -79,47 +57,28 @@ const status = computed(() => {
           </div>
         </div>
 
+        <p class="auth-intro">{{ intro }}</p>
+
         <ul class="auth-pillars">
-          <li v-for="item in pillars" :key="item.key">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path :d="item.icon" />
-            </svg>
+          <li v-for="item in capabilities" :key="item.key">
+            <span class="auth-pillar-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path :d="item.icon" />
+              </svg>
+            </span>
             <div>
               <strong>{{ item.title }}</strong>
               <span>{{ item.desc }}</span>
             </div>
           </li>
         </ul>
-
-        <figure class="auth-flow">
-          <figcaption>
-            七节点顺序工作流
-            <span class="auth-flow-src">graph/workflow.py · ORDER</span>
-          </figcaption>
-          <div class="auth-flow-track">
-            <div v-for="node in nodes" :key="node.key" class="auth-flow-node" :title="node.name">
-              <span class="auth-flow-dot" :style="{ background: node.color }" />
-              <small>{{ node.label }}</small>
-            </div>
-          </div>
-          <ul class="auth-flow-legend">
-            <li v-for="group in groups" :key="group.key">
-              <span class="auth-flow-swatch" :style="{ background: group.color }" />{{ group.label }}
-            </li>
-          </ul>
-        </figure>
-
-        <p class="auth-status">
-          <span class="dot" :class="status.dot" aria-hidden="true" />{{ status.text }}
-        </p>
       </div>
     </section>
 

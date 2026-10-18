@@ -31,13 +31,13 @@ const visible = computed(() => health.unreachable || issues.value.length > 0)
   <div v-if="visible" class="notice notice-warn">
     <strong v-if="health.unreachable">后端服务未连接</strong>
     <strong v-else>系统降级运行</strong>
-    <div v-if="health.unreachable" style="margin-top: 4px">
+    <div v-if="health.unreachable" class="notice-body">
       {{ health.errorMessage }}
     </div>
     <ul v-else>
       <li v-for="issue in issues" :key="issue">{{ issue }}</li>
     </ul>
-    <div style="margin-top: 8px">
+    <div class="btn-row">
       <button class="btn" :disabled="health.loading" @click="health.refresh()">
         {{ health.loading ? '检查中…' : '重新检查' }}
       </button>

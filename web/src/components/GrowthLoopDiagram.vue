@@ -87,7 +87,7 @@ function stepClass(stage) {
         </template>
       </div>
 
-      <p v-if="hasPending" class="faint" style="margin: 12px 0 0">
+      <p v-if="hasPending" class="faint loop-note">
         <span class="dot dot-warn" />
         虚线灰底的环节尚未开放，界面上不会展示这些环节的数据。
       </p>

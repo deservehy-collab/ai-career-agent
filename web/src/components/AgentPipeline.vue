@@ -72,60 +72,57 @@ function goTo(agent) {
 </script>
 
 <template>
-  <section class="card">
-    <div class="card-head">
-      <h2>
-        Agent 工作流
-        <span class="sub">7 个节点顺序执行</span>
-      </h2>
+  <section class="rail" aria-label="Agent 工作流">
+    <div class="rail-head">
+      <h2>Agent 工作流</h2>
       <AppBadge v-if="isRunning" text="执行中" tone="primary" />
       <AppBadge v-else-if="isInterrupted" text="执行中断" tone="danger" />
       <AppBadge v-else-if="summary" text="已完成" tone="ok" />
       <AppBadge v-else text="待运行" tone="muted" />
     </div>
 
-    <div class="card-body">
-      <div class="agent-rail" :class="{ 'is-running': isRunning, 'is-interrupted': isInterrupted }">
-        <button
-          v-for="node in nodes"
-          :key="node.node"
-          type="button"
-          class="agent-node"
-          :class="{ 'is-idle': !summary, 'is-degraded': node.output?.tone === 'warn' }"
-          :style="node.colorStyle"
-          :disabled="!summary"
-          :title="node.tip"
-          @click="goTo(node)"
-        >
-          <span class="agent-node-top">
-            <span class="agent-tag-num">{{ node.order }}</span>
-            <span class="agent-node-name">{{ node.displayName }}</span>
+    <div class="agent-rail" :class="{ 'is-running': isRunning, 'is-interrupted': isInterrupted }">
+      <button
+        v-for="node in nodes"
+        :key="node.node"
+        type="button"
+        class="agent-node"
+        :class="{ 'is-idle': !summary, 'is-degraded': node.output?.tone === 'warn' }"
+        :style="node.colorStyle"
+        :disabled="!summary"
+        :title="node.tip"
+        @click="goTo(node)"
+      >
+        <span class="agent-node-top">
+          <span class="agent-tag-num">{{ node.order }}</span>
+          <span class="agent-node-name">{{ node.displayName }}</span>
+        </span>
+
+        <span class="agent-node-duty">{{ node.duty }}</span>
+
+        <template v-if="node.output">
+          <span class="agent-node-out">
+            <AppBadge :text="node.output.text" :tone="node.output.tone" />
           </span>
-
-          <span class="agent-node-duty">{{ node.duty }}</span>
-
-          <template v-if="node.output">
-            <span class="agent-node-out">
-              <AppBadge :text="node.output.text" :tone="node.output.tone" />
-            </span>
-            <span v-if="node.output.note" class="agent-node-note">{{ node.output.note }}</span>
-          </template>
-        </button>
-      </div>
-
-      <div v-if="isRunning" class="notice notice-info" style="margin: 12px 0 0">
-        后台正按顺序执行全部 7 个节点。后端只提供「排队 / 执行中 / 完成 / 失败」四种<strong>整体</strong>状态，
-        没有单节点进度信息，因此这里不标记任何节点为"正在执行"。
-      </div>
-
-      <div v-else-if="isInterrupted" class="notice notice-danger" style="margin: 12px 0 0">
-        执行中断。后端只返回一条错误信息，<strong>无法定位是哪个节点失败的</strong>，
-        因此这里不指向任何具体节点。错误详情见右侧进度卡。
-      </div>
-
-      <p v-else-if="summary" class="faint" style="margin: 12px 0 0">
-        点击任一节点可跳转到它在结果区对应的卡片。
-      </p>
+          <span v-if="node.output.note" class="agent-node-note">{{ node.output.note }}</span>
+        </template>
+      </button>
     </div>
+
+    <div v-if="isRunning" class="notice notice-info">
+      后台正按顺序执行全部 7 个节点。后端只提供「排队 / 执行中 / 完成 / 失败」四种<strong>整体</strong>状态，
+      没有单节点进度信息，因此这里不标记任何节点为"正在执行"。
+    </div>
+
+    <div v-else-if="isInterrupted" class="notice notice-danger">
+      执行中断。后端只返回一条错误信息，<strong>无法定位是哪个节点失败的</strong>，
+      因此这里不指向任何具体节点。错误详情见右侧进度卡。
+    </div>
+
+    <p v-else-if="summary" class="faint block-note">
+      点击任一节点可跳转到它在结果区对应的卡片。
+    </p>
+
+    <p class="faint block-note">graph/workflow.py · ORDER</p>
   </section>
 </template>

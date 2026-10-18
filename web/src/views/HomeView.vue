@@ -37,7 +37,7 @@ const isProfileEmpty = computed(
     <GrowthLoopDiagram />
 
     <div class="grid grid-2">
-      <section class="card" style="margin-bottom: 0">
+      <section class="card card--flush">
         <div class="card-head">
           <h2>
             我的画像
@@ -65,14 +65,14 @@ const isProfileEmpty = computed(
               <dt>项目经历</dt>
               <dd>{{ joinList(profile.projects, '未填写') }}</dd>
             </dl>
-            <div class="btn-row" style="margin-top: 14px">
+            <div class="btn-row">
               <router-link class="btn" to="/analyze">编辑画像并分析</router-link>
             </div>
           </template>
         </div>
       </section>
 
-      <section class="card" style="margin-bottom: 0">
+      <section class="card card--flush">
         <div class="card-head">
           <h2>
             最近一次分析的能力表
@@ -88,11 +88,11 @@ const isProfileEmpty = computed(
             这里会保存结构化的能力表，供后续提交任务完成证据时使用。
           </div>
           <div v-else class="table-wrap">
-            <table class="data">
+            <table class="data data--skills">
               <thead>
                 <tr>
-                  <th style="width: 150px">技能</th>
-                  <th style="width: 80px">等级</th>
+                  <th>技能</th>
+                  <th>等级</th>
                   <th>判断依据</th>
                 </tr>
               </thead>

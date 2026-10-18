@@ -6,7 +6,6 @@ import AppBadge from './AppBadge.vue'
 import EvidenceRefChip from './EvidenceRefChip.vue'
 import RagMetrics from './RagMetrics.vue'
 
-import { AGENT_GROUP } from '../utils/agents'
 import { buildReferencedBy, evidenceCode } from '../utils/evidence'
 import { evidenceOriginText, evidenceOriginTone, retrievalStatusText, retrievalStatusTone } from '../utils/enums'
 import { formatImportance, joinList } from '../utils/format'
@@ -42,11 +41,6 @@ const count = computed(() => (items.value ? items.value.length : 0))
 
 // 反向引用：编号 → 引用了它的岗位要求技能名
 const referencedBy = computed(() => buildReferencedBy(props.requirements || [], items.value || []))
-
-const panelStyle = computed(() => ({
-  '--agent-color': AGENT_GROUP.retrieval.color,
-  '--agent-soft': AGENT_GROUP.retrieval.soft,
-}))
 
 /** 本地闪光态：3 秒后自动收起，这样重复点击同一个编号能再次触发动画。 */
 const flash = ref('')
@@ -94,7 +88,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section id="card-evidence" class="card accent-left" :style="panelStyle">
+  <section id="card-evidence" class="card">
     <div class="card-head">
       <h2>
         RAG 检索证据
@@ -156,7 +150,7 @@ onBeforeUnmount(() => {
 
             <p class="evidence-quote">{{ item.note || '（本条没有证据原文）' }}</p>
 
-            <p v-if="item.context" class="faint" style="margin: 4px 0 0">
+            <p v-if="item.context" class="faint evidence-ctx">
               原文出处：{{ item.context }}
             </p>
 

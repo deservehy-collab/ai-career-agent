@@ -163,15 +163,15 @@ async function submit() {
 
     <div v-else-if="loadError" class="notice notice-danger">
       <strong>加载任务失败</strong>
-      <div style="margin-top: 4px">{{ loadError }}</div>
-      <div style="margin-top: 8px"><button class="btn" @click="load">重试</button></div>
+      <div class="notice-body">{{ loadError }}</div>
+      <div class="btn-row"><button class="btn" @click="load">重试</button></div>
     </div>
 
     <template v-else-if="data">
       <!-- 存储只读 / 异常 -->
       <div v-if="!data.writable" class="notice notice-warn">
         <strong>任务记录当前不可安全写入</strong>
-        <div style="margin-top: 4px">
+        <div class="notice-body">
           {{ data.warning || 'runs/loop.json 处于不可写状态（损坏 / 版本不符 / 权限问题），为避免覆盖现有数据，提交功能已禁用。' }}
         </div>
       </div>
@@ -182,7 +182,7 @@ async function submit() {
 
       <!-- 提交结果（三件事分开呈现） -->
       <CompletionResult v-if="submitResult" :result="submitResult" />
-      <div v-if="submitResult" class="btn-row" style="margin-bottom: 16px">
+      <div v-if="submitResult" class="btn-row btn-row--block">
         <button class="btn" @click="submitResult = null">收起提交结果</button>
       </div>
 
@@ -202,7 +202,7 @@ async function submit() {
             </h2>
           </div>
           <div class="modal-body">
-            <p class="muted" style="margin-top: 0">
+            <p class="muted flush-first">
               {{ completingTask.title }}
               <span class="faint">（关联技能：{{ (completingTask.skills || []).join('、') || '无' }}）</span>
             </p>
@@ -218,7 +218,7 @@ async function submit() {
                 rows="5"
                 placeholder="例：实现了文档切分与向量检索，用 20 条问题做了召回测试，命中率 85%"
               />
-              <div class="faint" style="margin-top: 4px">
+              <div class="faint field-count">
                 {{ evidenceText.trim().length }} / {{ EVIDENCE_MAX_LENGTH }}
               </div>
             </div>
@@ -226,7 +226,7 @@ async function submit() {
             <div v-if="evidenceError" class="notice notice-warn">{{ evidenceError }}</div>
             <div v-if="submitError" class="notice notice-danger">{{ submitError }}</div>
 
-            <div class="notice notice-info" style="margin-bottom: 0">
+            <div class="notice notice-info flush-last">
               提交后会同时得到三样东西：<strong>任务完成记录</strong>（真正落盘）、
               <strong>成长成果</strong>（可能构不成）、<strong>技能升级预览</strong>（不会立刻写入成长历史）。
             </div>

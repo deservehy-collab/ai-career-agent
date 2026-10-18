@@ -63,90 +63,83 @@ function handleClear() {
 </script>
 
 <template>
-  <section class="card">
-    <div class="card-head">
-      <h2>
-        我的画像
-        <span class="sub">保存在本机浏览器，每次分析随请求发送</span>
-      </h2>
-      <span v-if="profile.hasLastSkills" class="badge badge-primary">
-        已有 {{ profile.lastSkills.length }} 项分析能力
-      </span>
+  <section class="panel-block">
+    <div class="panel-head">
+      <h2>我的画像</h2>
+      <span class="panel-src">localStorage · career-agent:profile</span>
     </div>
 
-    <div class="card-body">
-      <div v-if="profile.storageFailed" class="notice notice-warn">
-        浏览器本地存储不可用（可能是隐私模式或空间已满），画像这次没能保存，刷新后会丢失。
-      </div>
+    <div v-if="profile.storageFailed" class="notice notice-warn">
+      浏览器本地存储不可用（可能是隐私模式或空间已满），画像这次没能保存，刷新后会丢失。
+    </div>
 
-      <div class="grid grid-2">
-        <div>
-          <div class="field">
-            <label for="pf-major">专业</label>
-            <input id="pf-major" v-model="profile.major" type="text" placeholder="如：计算机科学与技术" />
-          </div>
-
-          <div class="field">
-            <label for="pf-grade">年级</label>
-            <input id="pf-grade" v-model="profile.grade" type="text" placeholder="如：大三" />
-          </div>
-
-          <div class="field">
-            <label for="pf-job">
-              目标岗位
-              <span class="hint">必填，后端要求非空</span>
-            </label>
-            <input
-              id="pf-job"
-              v-model="profile.targetJob"
-              type="text"
-              placeholder="如：AI应用开发工程师"
-            />
-          </div>
+    <div class="grid grid-2">
+      <div>
+        <div class="field">
+          <label for="pf-major">专业</label>
+          <input id="pf-major" v-model="profile.major" type="text" placeholder="如：计算机科学与技术" />
         </div>
 
-        <div>
-          <div class="field">
-            <label for="pf-skills">
-              自述技能
-              <span class="hint">每行一项，或用顿号/逗号分隔 · 已填 {{ skillCount }} 项</span>
-            </label>
-            <textarea
-              id="pf-skills"
-              :value="skillsText"
-              rows="5"
-              placeholder="Python&#10;LangChain&#10;Docker"
-              @input="onSkillsInput"
-            />
-          </div>
+        <div class="field">
+          <label for="pf-grade">年级</label>
+          <input id="pf-grade" v-model="profile.grade" type="text" placeholder="如：大三" />
+        </div>
 
-          <div class="field">
-            <label for="pf-projects">
-              项目经历
-              <span class="hint">每行一项 · 已填 {{ projectCount }} 项</span>
-            </label>
-            <textarea
-              id="pf-projects"
-              :value="projectsText"
-              rows="3"
-              placeholder="RAG 知识库问答系统"
-              @input="onProjectsInput"
-            />
-          </div>
+        <div class="field">
+          <label for="pf-job">
+            目标岗位
+            <span class="hint">必填，后端要求非空</span>
+          </label>
+          <input
+            id="pf-job"
+            v-model="profile.targetJob"
+            type="text"
+            placeholder="如：AI应用开发工程师"
+          />
         </div>
       </div>
 
-      <div v-if="profile.profileWarnings.length" class="notice notice-info" style="margin-bottom: 0">
-        画像还不完整（{{ profile.profileWarnings.join('、') }}）—— 仍可发起分析，
-        但岗位匹配结果会偏保守。
-      </div>
+      <div>
+        <div class="field">
+          <label for="pf-skills">
+            自述技能
+            <span class="hint">每行一项，或用顿号/逗号分隔 · 已填 {{ skillCount }} 项</span>
+          </label>
+          <textarea
+            id="pf-skills"
+            :value="skillsText"
+            rows="5"
+            placeholder="Python&#10;LangChain&#10;Docker"
+            @input="onSkillsInput"
+          />
+        </div>
 
-      <div class="btn-row" style="margin-top: 14px">
-        <button class="btn" @click="handleClear">清空自述画像</button>
-        <span v-if="profile.lastSkillsAt" class="faint">
-          能力表更新于 {{ formatDateTime(profile.lastSkillsAt) }}
-        </span>
+        <div class="field">
+          <label for="pf-projects">
+            项目经历
+            <span class="hint">每行一项 · 已填 {{ projectCount }} 项</span>
+          </label>
+          <textarea
+            id="pf-projects"
+            :value="projectsText"
+            rows="3"
+            placeholder="RAG 知识库问答系统"
+            @input="onProjectsInput"
+          />
+        </div>
       </div>
+    </div>
+
+    <div v-if="profile.profileWarnings.length" class="notice notice-info">
+      画像还不完整（{{ profile.profileWarnings.join('、') }}）—— 仍可发起分析，
+      但岗位匹配结果会偏保守。
+    </div>
+
+    <div class="btn-row form-actions">
+      <button class="btn" @click="handleClear">清空自述画像</button>
+      <span v-if="profile.hasLastSkills" class="faint">
+        已有 {{ profile.lastSkills.length }} 项分析能力{{ profile.lastSkillsAt ? ` · 更新于 ${formatDateTime(profile.lastSkillsAt)}` : '' }}
+      </span>
     </div>
   </section>
 </template>

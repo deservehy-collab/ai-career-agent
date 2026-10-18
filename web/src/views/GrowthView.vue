@@ -226,8 +226,8 @@ async function submitManualEvent() {
 
     <div v-else-if="loadError" class="notice notice-danger">
       <strong>加载成长数据失败</strong>
-      <div style="margin-top: 4px">{{ loadError }}</div>
-      <div style="margin-top: 8px"><button class="btn" @click="load">重试</button></div>
+      <div class="notice-body">{{ loadError }}</div>
+      <div class="btn-row"><button class="btn" @click="load">重试</button></div>
     </div>
 
     <template v-else>
@@ -254,9 +254,9 @@ async function submitManualEvent() {
           <!-- 「判不了」与「没有」必须分开说 -->
           <div v-if="!pendingRestored" class="notice notice-warn">
             <strong>无法判断待处理成果</strong>
-            <div style="margin-top: 4px">
+            <div class="notice-body">
               成长历史不可读，因此没法确定哪些成果已经处理过。为避免重复提交，本次不列出待处理成果。
-              <ul style="margin: 6px 0 0; padding-left: 18px">
+              <ul class="mini-list">
                 <li v-for="(warn, i) in pendingWarnings" :key="i">{{ warn }}</li>
               </ul>
             </div>
@@ -272,8 +272,7 @@ async function submitManualEvent() {
               <article
                 v-for="(event, i) in pendingEvents"
                 :key="i"
-                class="evidence-item"
-                style="border-left-color: var(--agent-cognition)"
+                class="evidence-item pending-item"
               >
                 <header class="evidence-head">
                   <AppBadge
@@ -283,7 +282,7 @@ async function submitManualEvent() {
                   <strong>{{ event.title }}</strong>
                   <span class="faint">{{ formatDateTime(event.at) }}</span>
                 </header>
-                <p class="evidence-quote" style="background: var(--agent-cognition-soft)">
+                <p class="evidence-quote">
                   {{ event.evidence || '（无证据）' }}
                 </p>
                 <div class="evidence-meta">
@@ -294,7 +293,7 @@ async function submitManualEvent() {
                 </div>
               </article>
 
-              <p class="faint" style="margin: 12px 0 0">
+              <p class="faint sub-block flush-last">
                 这些成果<strong>还没有</strong>进入成长历史。点击下方「生成下一轮」时，
                 它们才会交给 growth_node 走正式写入路径并升级技能。
               </p>
@@ -323,24 +322,16 @@ async function submitManualEvent() {
         <div v-if="manual.open" class="card-body">
           <div class="notice notice-info">
             <strong>什么情况下用它？</strong>
-            <div style="margin-top: 4px">
+            <div class="notice-body">
               当你还没有任何任务、想先记录一条实际学过的内容（比如学了 Git、做一个问答小项目），
               填好提交后它就会变成「待处理成果」，再点下方「生成下一轮」即可生成真正的学习与项目任务。
             </div>
           </div>
 
-          <div
-            v-if="manual.error"
-            class="notice notice-danger"
-            style="margin-top: 12px"
-          >{{ manual.error }}</div>
-          <div
-            v-if="manual.message"
-            class="notice notice-ok"
-            style="margin-top: 12px"
-          >{{ manual.message }}</div>
+          <div v-if="manual.error" class="notice notice-danger sub-block">{{ manual.error }}</div>
+          <div v-if="manual.message" class="notice notice-ok sub-block">{{ manual.message }}</div>
 
-          <div style="margin-top: 14px; display: grid; gap: 14px">
+          <div class="manual-form">
             <div class="field">
               <label>成果类型</label>
               <div class="btn-row">
@@ -473,14 +464,14 @@ async function submitManualEvent() {
           </div>
 
           <!-- 二次确认 -->
-          <div v-if="confirming" class="notice notice-warn" style="margin-top: 14px">
+          <div v-if="confirming" class="notice notice-warn sub-block">
             <strong>确认生成下一轮？</strong>
-            <div style="margin-top: 4px">
+            <div class="notice-body">
               将把 <strong>{{ pendingEvents.length }} 条</strong>待处理成果交给成长节点，
               并重新生成学习与项目计划。该操作会修改 <span class="mono">runs/growth.json</span> 与
               <span class="mono">runs/loop.json</span>。
             </div>
-            <div class="btn-row" style="margin-top: 10px">
+            <div class="btn-row">
               <button class="btn" @click="confirming = false">取消</button>
               <button class="btn btn-primary" @click="confirmGenerate">确认并开始</button>
             </div>
@@ -489,7 +480,7 @@ async function submitManualEvent() {
           <div v-if="runError" class="notice notice-danger">{{ runError }}</div>
 
           <!-- 结果三态分离：任一项成功都不代表全部成功 -->
-          <div v-if="runResult" style="margin-top: 14px">
+          <div v-if="runResult" class="sub-block">
             <NextRoundResult :result="runResult" />
           </div>
         </div>
@@ -518,7 +509,7 @@ async function submitManualEvent() {
         <div class="card-body">
           <div v-if="history && !history.writable" class="notice notice-warn">
             <strong>成长历史不可读</strong>
-            <div style="margin-top: 4px">{{ history.warning }}</div>
+            <div class="notice-body">{{ history.warning }}</div>
           </div>
 
           <template v-else>
@@ -528,9 +519,9 @@ async function submitManualEvent() {
             </div>
 
             <div v-else>
-              <div v-if="latestSkills.length" style="margin-bottom: 16px">
-                <h3 style="font-size: 13px">最近一次确认的能力</h3>
-                <div class="tags" style="margin-top: 8px">
+              <div v-if="latestSkills.length" class="sub-group">
+                <h3 class="mini-title">最近一次确认的能力</h3>
+                <div class="tags tags--tight">
                   <span v-for="item in latestSkills" :key="item.skill" class="badge badge-ok">
                     {{ item.skill }} · {{ item.level || '无' }}
                   </span>
@@ -550,8 +541,8 @@ async function submitManualEvent() {
                     />
                   </div>
 
-                  <div v-if="(entry.level_changes || []).length" style="margin-top: 6px">
-                    <ul style="margin: 0; padding-left: 18px" class="muted">
+                  <div v-if="(entry.level_changes || []).length" class="meta-gap">
+                    <ul class="muted mini-list">
                       <li v-for="change in entry.level_changes" :key="change.skill">
                         <strong>{{ change.skill }}</strong>：{{ change.from || '无' }} → {{ change.to }}
                         <span class="faint">
@@ -561,19 +552,19 @@ async function submitManualEvent() {
                       </li>
                     </ul>
                   </div>
-                  <p v-else class="faint" style="margin: 6px 0 0">本次没有技能等级变化。</p>
+                  <p v-else class="faint meta-gap flush-last">本次没有技能等级变化。</p>
 
-                  <div v-if="(entry.events || []).length" class="faint" style="margin-top: 6px">
+                  <div v-if="(entry.events || []).length" class="faint meta-gap">
                     关联成果：{{ joinList((entry.events || []).map((e) => e.title)) }}
                   </div>
-                  <div v-if="(entry.blocked_upgrades || []).length" class="faint" style="margin-top: 4px">
+                  <div v-if="(entry.blocked_upgrades || []).length" class="faint meta-gap">
                     被前置门禁拦下 {{ entry.blocked_upgrades.length }} 项
                   </div>
                 </div>
               </article>
             </div>
 
-            <dl v-if="baseline" class="kv" style="margin-top: 16px; grid-template-columns: 110px 1fr">
+            <dl v-if="baseline" class="kv kv--mid sub-block">
               <dt>能力基线来源</dt>
               <dd>{{ baseline.source || '（未记录）' }}</dd>
               <dt>基线建立时间</dt>

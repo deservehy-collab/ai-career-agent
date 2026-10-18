@@ -82,27 +82,25 @@ const tone = computed(() => runStatusTone(props.status))
     <div class="card-body">
       <div v-if="isRunning">
         <div class="progress-indeterminate" />
-        <p style="margin: 12px 0 0" class="muted">
+        <p class="muted run-line">
           {{
             status === 'queued'
               ? '任务已排队。后台按单线程串行执行，请稍候…'
               : '模型正在分析岗位、能力与学习路线…'
           }}
         </p>
-        <p style="margin: 6px 0 0" class="faint">
+        <p class="faint run-line run-line--tight">
           已等待 <strong>{{ formatDuration(elapsedSeconds) }}</strong>
           <span v-if="runId"> · run_id <code class="mono">{{ runId }}</code></span>
         </p>
       </div>
 
       <div v-else-if="status === 'succeeded'">
-        <div class="notice notice-ok" style="margin-bottom: 0">
-          分析完成，用时 {{ formatDuration(elapsedSeconds) }}。
-        </div>
+        <div class="notice notice-ok">分析完成，用时 {{ formatDuration(elapsedSeconds) }}。</div>
       </div>
 
       <div v-else-if="status === 'failed'">
-        <div class="notice notice-danger" style="margin-bottom: 0">
+        <div class="notice notice-danger">
           <strong>
             {{
               errorKind === 'network'
@@ -114,8 +112,8 @@ const tone = computed(() => runStatusTone(props.status))
                     : '分析失败'
             }}
           </strong>
-          <div style="margin-top: 4px">{{ errorMessage }}</div>
-          <div style="margin-top: 6px" class="faint">你的画像已保留，可以直接重新发起。</div>
+          <div class="run-line run-line--tight">{{ errorMessage }}</div>
+          <div class="run-line run-line--loose faint">你的画像已保留，可以直接重新发起。</div>
         </div>
       </div>
     </div>

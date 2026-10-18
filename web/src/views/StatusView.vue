@@ -85,17 +85,17 @@ const degradedImpacts = computed(() => {
       <div class="card-body">
         <div v-if="health.errorMessage && !data" class="notice notice-danger">
           <strong>无法连接后端</strong>
-          <div style="margin-top: 4px">{{ health.errorMessage }}</div>
+          <div class="notice-body">{{ health.errorMessage }}</div>
         </div>
 
         <div v-else-if="health.loading && !data" class="empty">正在检查系统状态…</div>
 
-        <div v-else-if="missingSections.length" class="notice notice-warn" style="margin-bottom: 0">
+        <div v-else-if="missingSections.length" class="notice notice-warn flush-last">
           后端体检结果缺少以下段落：<strong>{{ missingSections.join('、') }}</strong>。
           对应区块已隐藏 —— 缺失不等于正常，也不等于异常，这里不做推测。
         </div>
 
-        <div v-else-if="degradedImpacts.length" class="notice notice-warn" style="margin-bottom: 0">
+        <div v-else-if="degradedImpacts.length" class="notice notice-warn flush-last">
           <strong>「降级运行」意味着部分功能受影响：</strong>
           <ul>
             <li v-for="(item, i) in degradedImpacts" :key="i">{{ item }}</li>
@@ -142,7 +142,7 @@ const degradedImpacts = computed(() => {
               <span v-else class="faint">未读取到模型列表</span>
             </dd>
             <dt v-if="data.ollama.error">错误</dt>
-            <dd v-if="data.ollama.error" class="mono" style="color: var(--danger)">
+            <dd v-if="data.ollama.error" class="mono is-error">
               {{ data.ollama.error }}
             </dd>
           </dl>
@@ -151,7 +151,7 @@ const degradedImpacts = computed(() => {
 
       <!-- 索引 + 知识库 -->
       <div class="grid grid-2">
-        <section v-if="data.index" class="card" style="margin-bottom: 0">
+        <section v-if="data.index" class="card card--flush">
           <div class="card-head">
             <h2>向量索引（Chroma）</h2>
             <AppBadge :text="data.index.ok ? '正常' : '异常'" :tone="data.index.ok ? 'ok' : 'danger'" />
@@ -167,17 +167,17 @@ const degradedImpacts = computed(() => {
               <dt>向量条数</dt>
               <dd>{{ data.index.vectors ?? '—' }}</dd>
               <dt v-if="data.index.error">错误</dt>
-              <dd v-if="data.index.error" class="mono" style="color: var(--danger)">
+              <dd v-if="data.index.error" class="mono is-error">
                 {{ data.index.error }}
               </dd>
             </dl>
-            <p class="faint" style="margin-bottom: 0">
+            <p class="faint flush-last">
               索引缺失时检索会降级为"无证据"，但分析流程仍会继续。
             </p>
           </div>
         </section>
 
-        <section v-if="data.knowledge" class="card" style="margin-bottom: 0">
+        <section v-if="data.knowledge" class="card card--flush">
           <div class="card-head">
             <h2>业务知识库</h2>
             <AppBadge
@@ -193,7 +193,7 @@ const degradedImpacts = computed(() => {
                   :text="data.knowledge.skills.ok ? `${data.knowledge.skills.count} 项技能` : '加载失败'"
                   :tone="data.knowledge.skills.ok ? 'ok' : 'danger'"
                 />
-                <div v-if="data.knowledge.skills.error" class="mono" style="color: var(--danger)">
+                <div v-if="data.knowledge.skills.error" class="mono is-error">
                   {{ data.knowledge.skills.error }}
                 </div>
               </dd>
@@ -203,12 +203,12 @@ const degradedImpacts = computed(() => {
                   :text="data.knowledge.projects.ok ? `${data.knowledge.projects.count} 个项目` : '加载失败'"
                   :tone="data.knowledge.projects.ok ? 'ok' : 'danger'"
                 />
-                <div v-if="data.knowledge.projects.error" class="mono" style="color: var(--danger)">
+                <div v-if="data.knowledge.projects.error" class="mono is-error">
                   {{ data.knowledge.projects.error }}
                 </div>
               </dd>
             </dl>
-            <p class="faint" style="margin-bottom: 0">
+            <p class="faint flush-last">
               技能库用于成长升级的前置门禁，项目库用于项目推荐排序。
             </p>
           </div>
@@ -216,7 +216,7 @@ const degradedImpacts = computed(() => {
       </div>
 
       <!-- 存储 -->
-      <section v-if="data.stores" class="card" style="margin-top: 16px">
+      <section v-if="data.stores" class="card card--top">
         <div class="card-head">
           <h2>
             运行数据存储
@@ -225,13 +225,13 @@ const degradedImpacts = computed(() => {
         </div>
         <div class="card-body">
           <div class="table-wrap">
-            <table class="data">
+            <table class="data data--stores">
               <thead>
                 <tr>
-                  <th style="width: 130px">文件</th>
-                  <th style="width: 90px">状态</th>
-                  <th style="width: 100px">可写</th>
-                  <th style="width: 90px">已存在</th>
+                  <th>文件</th>
+                  <th>状态</th>
+                  <th>可写</th>
+                  <th>已存在</th>
                   <th>路径 / 说明</th>
                 </tr>
               </thead>
@@ -248,7 +248,7 @@ const degradedImpacts = computed(() => {
                   <td>{{ data.stores.growth.exists ? '是' : '否' }}</td>
                   <td>
                     <div class="mono faint">{{ data.stores.growth.path }}</div>
-                    <div v-if="data.stores.growth.warning" style="color: var(--warn)">
+                    <div v-if="data.stores.growth.warning" class="is-warn">
                       {{ data.stores.growth.warning }}
                     </div>
                   </td>
@@ -270,7 +270,7 @@ const degradedImpacts = computed(() => {
                   <td>{{ data.stores.loop.exists ? '是' : '否' }}</td>
                   <td>
                     <div class="mono faint">{{ data.stores.loop.path }}</div>
-                    <div v-if="data.stores.loop.warning" style="color: var(--warn)">
+                    <div v-if="data.stores.loop.warning" class="is-warn">
                       {{ data.stores.loop.warning }}
                     </div>
                   </td>

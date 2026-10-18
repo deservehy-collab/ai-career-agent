@@ -32,10 +32,10 @@ const isShortCircuit = computed(
 
 <template>
   <div>
-    <h3 style="font-size: 13px">本次生成结果</h3>
+    <h3 class="mini-title">本次生成结果</h3>
 
     <!-- 三个独立状态，互不替代 -->
-    <div class="metric-strip" style="margin-top: 8px">
+    <div class="metric-strip result-note">
       <div class="metric">
         <div class="metric-label">新轮次（runs/loop.json）</div>
         <div class="metric-value">
@@ -69,7 +69,7 @@ const isShortCircuit = computed(
       </div>
     </div>
 
-    <dl class="kv" style="margin-top: 12px; grid-template-columns: 110px 1fr">
+    <dl class="kv kv--mid sub-block">
       <dt>成长结论</dt>
       <dd>
         <AppBadge
@@ -89,13 +89,13 @@ const isShortCircuit = computed(
       </template>
     </dl>
 
-    <div v-if="r.warning" class="notice notice-warn" style="margin-top: 12px">{{ r.warning }}</div>
+    <div v-if="r.warning" class="notice notice-warn sub-block">{{ r.warning }}</div>
     <div v-for="(warn, i) in r.warnings || []" :key="i" class="notice notice-warn">{{ warn }}</div>
 
-    <div v-if="isShortCircuit" class="notice notice-info" style="margin-top: 12px; margin-bottom: 0">
+    <div v-if="isShortCircuit" class="notice notice-info sub-block flush-last">
       本次没有待处理成果，后端直接返回，<strong>未重跑流水线</strong>，因此没有新的学习 / 项目计划。
     </div>
-    <p v-else class="faint" style="margin-bottom: 0">
+    <p v-else class="faint flush-last">
       三项互相独立：轮次建了但成长没写、或成长写了但轮次没存，都是可能出现的<strong>部分成功</strong>，
       上方的提示会如实说明。
     </p>

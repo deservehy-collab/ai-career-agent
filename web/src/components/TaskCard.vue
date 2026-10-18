@@ -35,7 +35,7 @@ const KIND_LETTER = { learning: '学习', project: '项目' }
 
     <h3 class="task-title">{{ task.title || '（无标题）' }}</h3>
 
-    <div class="tags" style="margin-top: 6px">
+    <div class="tags tags--tight">
       <span v-for="skill in task.skills || []" :key="skill" class="badge">{{ skill }}</span>
       <span v-if="!(task.skills || []).length" class="faint">未关联技能</span>
     </div>

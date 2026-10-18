@@ -139,11 +139,10 @@ h4 {
 }
 
 /* 数据列、计数、时间用等宽数字，跳动时不改变列宽 */
-.ov-readout dd,
+.ledger dd,
 table.data,
 .mono,
 .ov-station-no,
-.guide-num,
 .badge {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
@@ -940,17 +939,45 @@ details.fold > .fold-body {
 /* ── 两栏栅格（左流程轨 + 右结果区）───────────────────────────────── */
 .layout-rail {
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-columns: 252px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
 
+/* 流程轨整体落到 tier-1 沉底表面上：轨内节点是白行、不各自描边，
+   边界交给沉底色，脊柱色带是这条轨唯一的强调线。 */
 .rail {
   position: sticky;
   top: 16px; /* 桌面端无顶栏，只需让开内容区上边距；窄屏见下面媒体查询 */
+  background: var(--surface-sunk);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
   /* 7 个节点文字较多时可能超出视口，自身可滚动，避免底部节点被顶出屏幕 */
   max-height: calc(100vh - 32px);
   overflow-y: auto;
+}
+
+.rail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin: 0 0 var(--sp-3);
+}
+
+.rail-head h2 {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--text-muted);
+}
+
+/* 轨下面的说明条 / 脚注：与节点列表之间只留一档间距 */
+.rail .notice,
+.rail .block-note {
+  margin: var(--sp-3) 0 0;
 }
 
 @media (max-width: 980px) {
@@ -964,19 +991,25 @@ details.fold > .fold-body {
   }
 }
 
-/* ── 流程轨节点 ─────────────────────────────────────────────────────── */
+/* ── 流程轨：一条按色族换色的分段脊柱 ───────────────────────────────── */
+/* 脊柱是**结构线**，不是每张卡的装饰边（概览页 .ov-station 的纵版对应物）：
+   容器左让出 16px 轨道槽，每个节点在槽里画自己那一段、上下各多出 3px，
+   正好和相邻段的 6px 间距咬合 —— 七段读起来是一条线，换色的位置就是换族的位置。 */
 .agent-rail {
   position: relative;
+  padding-left: 16px;
 }
 
-/* 纵向连接线：把 7 个节点连成一条流水线 */
+/* 轨道底：静止时被各段实色盖住，只在段落之外的余量里露出中性色；
+   运行中/中断时它升级为整条轨的状态线（见下面的 is-running / is-interrupted）。 */
 .agent-rail::before {
   content: "";
   position: absolute;
-  left: 15px;
-  top: 18px;
-  bottom: 18px;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: 2px;
+  border-radius: 999px;
   background: var(--border);
   z-index: 0;
 }
@@ -990,13 +1023,23 @@ details.fold > .fold-body {
   font: inherit;
   color: inherit;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 1px solid var(--agent-color, var(--border-strong));
+  border: 0;
   border-radius: var(--radius-sm);
   padding: 9px 12px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   cursor: pointer;
   transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+/* 本节点所属的那一段脊柱 */
+.agent-node::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--agent-color, var(--border-strong));
 }
 
 .agent-node:hover {
@@ -1060,15 +1103,22 @@ details.fold > .fold-body {
 }
 
 /* 该节点降级（检索未命中 / 产出为空）—— 只描述结果，不描述执行过程 */
-.agent-node.is-degraded {
-  border-left-color: var(--warn);
+.agent-node.is-degraded::before {
+  background: var(--warn);
 }
 
-/* 运行中：整条轨呈不确定态，**不给任何单个节点标状态** */
+/* 运行中：整条轨呈不确定态，**不给任何单个节点标状态**。
+   做法是让轨级状态线盖到分段脊柱之上，并把七段本身压暗 —— 色族分段暂时让位给
+   「整条链路还在跑」这一个事实，而不是假装知道跑到第几格了。 */
 .agent-rail.is-running::before {
+  z-index: 2;
   background: linear-gradient(180deg, var(--primary) 0%, var(--primary-soft) 50%, var(--primary) 100%);
   background-size: 100% 200%;
   animation: rail-flow 2.4s linear infinite;
+}
+
+.agent-rail.is-running .agent-node::before {
+  opacity: 0.25;
 }
 
 @keyframes rail-flow {
@@ -1083,11 +1133,16 @@ details.fold > .fold-body {
 /* 运行中断：只在轨级别标注，不指向具体节点
    （后端只回一个错误字符串，定位不到是哪个节点失败的） */
 .agent-rail.is-interrupted::before {
+  z-index: 2;
   background: repeating-linear-gradient(
     180deg,
     var(--danger) 0 6px,
     transparent 6px 12px
   );
+}
+
+.agent-rail.is-interrupted .agent-node::before {
+  opacity: 0.25;
 }
 
 /* ── Agent 归属标记（卡片头部）──────────────────────────────────────── */
@@ -1203,11 +1258,6 @@ button.chip {
   font-weight: 600;
 }
 
-/* ── 卡片左侧强调边（归属 Agent 色）────────────────────────────────── */
-.card.accent-left {
-  border-left: 1px solid var(--agent-color, var(--border-strong));
-}
-
 /* ── 两级表面：panel 讲叙述，card 装数据 ─────────────────────────────
    一个边界只给一种信号：panel 用沉底中性色（不描边），card 用白底 + 1px
    描边。满页同规格圆角框是后台模板的第一指纹，所以内容页只剩真数据用 card。 */
@@ -1248,14 +1298,37 @@ button.chip {
   color: var(--text-muted);
 }
 
-/* ── 首页 Hero：左标题右真实读数，非对称两栏，不套框也不铺渐变 ─────── */
+/* ── 首页 Hero：左主张右四步上手，非对称两栏，不套框也不铺渐变 ─────── */
 .ov-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(228px, 0.75fr);
   gap: var(--sp-6) var(--sp-8);
-  align-items: start;
+  align-items: center;
   padding: var(--sp-5) 0 var(--sp-1);
   margin-bottom: var(--sp-6);
+}
+
+/* 平台身份小胶囊：一行说清「这是什么」，给左栏一点顶部重量，不铺长句 */
+.ov-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 var(--sp-4);
+  padding: 5px 13px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(var(--primary-rgb), 0.14);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.ov-eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
 }
 
 /* 中文标题不吃负字距，重量和字号负责版面就够 */
@@ -1266,13 +1339,6 @@ button.chip {
   line-height: 1.2;
   letter-spacing: -0.2px;
   max-width: 15em;
-}
-
-.ov-hero .lead {
-  margin: var(--sp-4) 0 0;
-  font-size: var(--fs-lead);
-  line-height: 1.7;
-  max-width: 56ch;
 }
 
 /* 一屏一个主行动：次级入口降级成文字链接，不跟主按钮抢重量 */
@@ -1290,7 +1356,7 @@ button.chip {
   color: var(--primary-dark);
 }
 
-/* 只读本机状态与知识库计数，取不到的行整行不渲染 */
+/* 沉底容器：先落到 tier-1，浮在上面的白行才有层次（四步上手用） */
 .ov-rail {
   display: grid;
   gap: var(--sp-3);
@@ -1308,14 +1374,93 @@ button.chip {
   color: var(--text-muted);
 }
 
-.ov-readout {
+/* ── 首页签名件：四步上手序列（编号即真实顺序，兼作最省事的跳转）────────
+   容器复用 .ov-rail 的沉底表面，四步是浮在上面的白行 —— 两级表面的同一规矩。 */
+.ov-start-list {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.ov-start-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 10px 13px;
+  color: var(--text);
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.ov-start-item:hover {
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.ov-start-item:active {
+  transform: translateY(0);
+}
+
+.ov-start-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(var(--primary-rgb), 0.18);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-start-text {
+  min-width: 0;
+}
+
+.ov-start-text strong {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.ov-start-text span {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.ov-start-arrow {
+  color: var(--text-faint);
+  transition: transform 0.16s ease, color 0.16s ease;
+}
+
+.ov-start-item:hover .ov-start-arrow {
+  transform: translateX(3px);
+  color: var(--primary-dark);
+}
+
+/* 「上手须知」列表行内的跳转链接：跟在说明后头，不抢正文的重量 */
+.ov-inline-link {
+  margin-left: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ledger {
   margin: 0;
   background: var(--surface);
   border-radius: var(--radius);
   padding: 2px var(--sp-4);
 }
 
-.ov-readout > div {
+.ledger > div {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -1324,23 +1469,23 @@ button.chip {
   border-bottom: 1px solid var(--border);
 }
 
-.ov-readout > div:last-child {
+.ledger > div:last-child {
   border-bottom: 0;
 }
 
-.ov-readout dt {
+.ledger dt {
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
-.ov-readout dd {
+.ledger dd {
   margin: 0;
   font-size: var(--fs-body);
   font-weight: 600;
   text-align: right;
 }
 
-.ov-readout dd.is-mono {
+.ledger dd.is-mono {
   font-family: ui-monospace, Consolas, monospace;
   font-size: var(--fs-sm);
   font-weight: 500;
@@ -1514,49 +1659,6 @@ button.chip {
   text-align: right;
 }
 
-/* ── 能力规格清单：左列是实现出处，右列是能力说明 ───────────────────── */
-.ov-spec {
-  display: grid;
-}
-
-.ov-spec-row {
-  display: grid;
-  grid-template-columns: minmax(0, 210px) minmax(0, 1fr);
-  gap: var(--sp-6);
-  padding: var(--sp-5) 0;
-  border-top: 1px solid var(--border);
-}
-
-.ov-spec-row:first-child {
-  border-top: 0;
-  padding-top: var(--sp-1);
-}
-
-.ov-spec-src {
-  margin: 0;
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: var(--fs-xs);
-  line-height: 1.7;
-  color: var(--text-muted);
-}
-
-.ov-spec-title {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin: 0;
-  font-size: var(--fs-h2);
-  font-weight: 700;
-}
-
-.ov-spec-row p {
-  margin: 6px 0 0;
-  max-width: 88ch;
-  font-size: var(--fs-sm);
-  line-height: 1.8;
-  color: var(--text-muted);
-}
-
 /* ── 成长闭环示意图 ─────────────────────────────────────────────────── */
 .loop-row {
   display: flex;
@@ -1612,10 +1714,11 @@ button.chip {
    RAG 证据面板
    ══════════════════════════════════════════════════════════════════════ */
 
+/* 证据条：白底 + 一圈 1px 描边。检索色的身份由 E 编号芯片和原文底色承担，
+   不再额外挂一条左侧装饰边（脊柱才是这条链路该出现的地方）。 */
 .evidence-item {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 1px solid var(--agent-retrieval);
   border-radius: var(--radius-sm);
   padding: 10px 13px;
   margin-bottom: 10px;
@@ -1641,6 +1744,12 @@ button.chip {
   background: var(--agent-retrieval-soft);
   font-size: var(--fs-sm);
   line-height: 1.65;
+}
+
+/* 原文出处紧贴原文下方，只留一档间距 */
+.evidence-ctx {
+  margin: 4px 0 0;
+  font-size: var(--fs-xs);
 }
 
 .evidence-meta {
@@ -1925,7 +2034,7 @@ button.chip {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 28px;
+  margin-bottom: 26px;
 }
 
 .auth-logo {
@@ -1960,134 +2069,59 @@ button.chip {
   color: var(--text-muted);
 }
 
+.auth-intro {
+  margin: 0 0 26px;
+  max-width: 40ch;
+  font-size: var(--fs-body);
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
 .auth-pillars {
   list-style: none;
-  margin: 0 0 22px;
+  margin: 0;
   padding: 0;
   display: grid;
-  gap: 13px;
+  gap: 16px;
 }
 
 .auth-pillars li {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 13px;
 }
 
-.auth-pillars svg {
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
-  margin-top: 2px;
+/* 每条能力配一枚柔和的图标徽章：白底高光 + 主色描边，让品牌区精致但不喧哗 */
+.auth-pillar-icon {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: var(--primary-soft);
   color: var(--primary-dark);
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(var(--primary-rgb), 0.14);
+}
+
+.auth-pillar-icon svg {
+  width: 19px;
+  height: 19px;
 }
 
 .auth-pillars strong {
   display: block;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text);
 }
 
 .auth-pillars span {
   display: block;
-  font-size: var(--fs-xs);
-  line-height: 1.55;
-  color: var(--text-muted);
-}
-
-/* ── 七节点流水线图 ────────────────────────────────────────────────────
-   节点名与顺序来自 utils/agents.js，四色族同样沿用工作流展示那套变量，
-   所以这张图和「岗位分析」页的流水线图是同一份事实。 */
-.auth-flow {
-  margin: 0 0 22px;
-  padding: 14px 16px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.auth-flow figcaption {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-
-.auth-flow-src {
-  font-family: Consolas, "Courier New", monospace;
-  font-size: var(--fs-xs);
-  font-weight: 400;
-  color: var(--text-faint);
-}
-
-.auth-flow-track {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  margin-top: 14px;
-}
-
-/* 纯顺序图、没有分支边，所以一条贯穿直线就是准确的图示，而不是装饰 */
-.auth-flow-track::before {
-  content: "";
-  position: absolute;
-  top: 6px;
-  left: 7px;
-  right: 7px;
-  border-top: 1.5px dashed var(--border-strong);
-}
-
-.auth-flow-node {
-  position: relative;
-  display: grid;
-  gap: 6px;
-  justify-items: center;
-}
-
-.auth-flow-dot {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.92); /* 让虚线在圆点处断开 */
-}
-
-.auth-flow-node small {
-  font-size: var(--fs-xs);
-  line-height: 1.3;
-  text-align: center;
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
-}
-
-.auth-flow-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-}
-
-.auth-flow-legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.auth-flow-swatch {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-}
-
-.auth-status {
-  margin: 0;
-  font-size: var(--fs-xs);
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
   color: var(--text-muted);
 }
 
@@ -2400,10 +2434,8 @@ button.chip {
     margin-bottom: 0;
   }
 
-  /* 窄屏首屏寸土寸金：流水线图在 7 个节点上排不下，连同卖点与状态行一起让位给表单 */
-  .auth-pillars,
-  .auth-flow,
-  .auth-status {
+  /* 窄屏首屏寸土寸金：能力清单让位给表单，只保留品牌与一句话定位 */
+  .auth-pillars {
     display: none;
   }
 
@@ -2492,8 +2524,10 @@ input:-webkit-autofill:focus {
   border-color: #9d3e40;
 }
 
-.ov-note {
-  margin: 14px 0 0;
+/* 段落级的补充说明：全站统一「小字、上方留白、行高放宽」这一档，
+   出现在概览页与内页结果区，组件里不再写 margin 行内样式。 */
+.block-note {
+  margin: var(--sp-3) 0 0;
   font-size: var(--fs-xs);
   line-height: 1.7;
 }
@@ -2501,81 +2535,6 @@ input:-webkit-autofill:focus {
 /* 概览是入口页：栏目头跟页面头同一档字号，但少一点上边距 */
 .page-head h2 {
   font-size: var(--fs-h1);
-}
-
-/* 入口页里两处双列卡区仍要保留段距 */
-.ov-cards {
-  margin-bottom: var(--sp-4);
-}
-
-/* 新手引导 */
-.guide-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.guide-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sp-3);
-  padding: 13px 0;
-  border-top: 1px dashed var(--border);
-}
-
-.guide-item:first-child {
-  border-top: 0;
-  padding-top: 2px;
-}
-
-.guide-num {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  margin-top: 1px;
-  border-radius: 50%;
-  background: var(--primary-soft);
-  color: var(--primary-dark);
-  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(var(--primary-rgb), 0.18);
-  font-size: var(--fs-xs);
-  font-weight: 700;
-}
-
-.guide-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.guide-text h3 {
-  margin: 0;
-  font-size: var(--fs-body);
-}
-
-.guide-text p {
-  margin: 4px 0 0;
-  font-size: var(--fs-sm);
-  line-height: 1.7;
-  color: var(--text-muted);
-}
-
-.guide-cta {
-  flex: none;
-  align-self: center;
-}
-
-.ov-result p {
-  margin: 0 0 var(--sp-2);
-  line-height: 1.75;
-}
-
-.ov-result-list {
-  margin: 0 0 var(--sp-3);
-  padding-left: 18px;
-  font-size: var(--fs-sm);
-  line-height: 1.9;
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -3044,6 +3003,400 @@ input:-webkit-autofill:focus {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   岗位分析 /analyze（工作流控制台）
+   —— 沿用概览页那套语言：tier-1 沉底装叙述与操作，tier-2 白卡只装真实产出，
+      agent 色只出现在结构线（脊柱 / 阶段线）上，不当卡片装饰边。
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* 沉底面板里的分块：一块是画像、一块是检索范围，用一条发丝线分格，
+   不再各自套一张白框（嵌套卡在概览页就被否掉了）。 */
+.panel-block + .panel-block {
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-6);
+  border-top: 1px solid var(--border);
+}
+
+/* 面板内的小标题：比 .panel-head 的 h2 低两档，只做块内分组 */
+.sub-title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.sub-title.is-ok {
+  color: var(--ok);
+}
+
+.sub-title.is-warn {
+  color: var(--warn);
+}
+
+/* 阶段 / 项目标题里的徽标跟在名称后面，留一档间距 */
+.sub-title .badge {
+  margin-left: 6px;
+}
+
+/* 表单区与按钮行之间的固定节奏（组件里不再写 margin-top 行内样式） */
+.form-actions {
+  margin-top: var(--sp-4);
+}
+
+.loose-note {
+  margin: var(--sp-3) 0 0;
+  line-height: 1.7;
+}
+
+/* 进度卡内的纵向节奏：块首留一档、块间留半档，替代原来的 margin 行内样式 */
+.run-line {
+  margin: var(--sp-3) 0 0;
+}
+
+.run-line--tight {
+  margin-top: 6px;
+}
+
+.run-line--loose {
+  margin-top: var(--sp-2);
+}
+
+/* 末尾提示条不再吃掉卡片/面板的下边距 */
+.notice:last-child {
+  margin-bottom: 0;
+}
+
+/* 检索范围三选一：原生单选留在白片里，选中态抬到品牌绿。
+   这是「一组互斥选项」，不是三个按钮，所以不复用 .btn。 */
+.mode-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.mode-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: var(--control-h);
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.mode-opt:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.mode-opt.is-on {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+.mode-opt input[type="radio"] {
+  margin: 0;
+}
+
+/* 窄标签列：项目 / JD 预览这类「标签很短」的账本 */
+.kv.kv--narrow {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
+/* 分组标题：它下面的控件是一组（单选组），不是单个字段的 label */
+.field .field-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 5px;
+  font-size: var(--fs-sm);
+}
+
+/* ── 学习路线：阶段顺序是真实信息，所以给它一条阶段脊柱 ──────────────── */
+.plan-list {
+  position: relative;
+  padding-left: 18px;
+}
+
+/* 一条规划色的连续线；阶段点落在每段开头，读起来是「按 stage 1..N 排序」 */
+.plan-list::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--agent-plan);
+}
+
+.plan-stage {
+  position: relative;
+  padding-bottom: var(--sp-5);
+}
+
+.plan-stage:last-child {
+  padding-bottom: 0;
+}
+
+.plan-stage::before {
+  content: "";
+  position: absolute;
+  left: -22px;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--agent-plan);
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+/* ── 项目路线：一张卡里的分隔行，不是每张卡再套一层卡 ────────────────── */
+.proj-item {
+  padding: var(--sp-4) 0;
+  border-top: 1px solid var(--border);
+}
+
+.proj-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.proj-item:last-child {
+  padding-bottom: 0;
+}
+
+/* 受阻原因贴在 kv 下面，只留一档上间距 */
+.proj-item .notice {
+  margin: var(--sp-3) 0 0;
+}
+
+/* ── 数据表列宽：集中在这里，模板里不写 style="width:"──────────────── */
+.data--skills th:nth-child(1) {
+  width: 160px;
+}
+
+.data--skills th:nth-child(2) {
+  width: 90px;
+}
+
+.data--req th:nth-child(1) {
+  width: 180px;
+}
+
+.data--req th:nth-child(2) {
+  width: 86px;
+}
+
+.data--req th:nth-child(3),
+.data--req th:nth-child(4) {
+  width: 150px;
+}
+
+.data--req th:nth-child(5) {
+  width: 130px;
+}
+
+.data--gaps th:nth-child(1) {
+  width: 150px;
+}
+
+.data--gaps th:nth-child(2) {
+  width: 90px;
+}
+
+.data--gaps th:nth-child(3) {
+  width: 70px;
+}
+
+.data--gaps th:nth-child(4) {
+  width: 120px;
+}
+
+.data--gaps th:nth-child(5) {
+  width: 80px;
+}
+
+/* 优势 / 短板这类无标记列表：去掉默认圆点，行距交给 .tags 的节奏 */
+.plain-list {
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm);
+  line-height: 1.75;
+}
+
+.plain-list li {
+  padding: 5px 0;
+  border-top: 1px dashed var(--border);
+}
+
+.plain-list li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* ── 内页排布节奏 ──────────────────────────────────────────────────────
+   散落各页的 style="margin…" 大多是同一批微调：卡片贴边、区块呼吸、小标题、
+   末尾不留多余下边距。收成语义类后模板只描述「这是什么」，不写像素。 */
+.card--flush {
+  margin-bottom: 0;
+}
+
+.card-body > .btn-row {
+  margin-top: var(--sp-4);
+}
+
+.tags--tight {
+  margin-top: var(--sp-2);
+}
+
+/* 卡片/区块里最后一段提示或列表：去掉收尾的多余下边距 */
+.flush-last {
+  margin-bottom: 0;
+}
+
+/* 区块内的小标题：半粗 + fs-sm，替代 style="font-size: 13px" 的散装小字 */
+.mini-title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* 告警条里紧跟标题的正文与操作，各给一档呼吸 */
+.notice-body {
+  margin-top: var(--sp-1);
+}
+
+.notice .btn-row {
+  margin-top: var(--sp-2);
+}
+
+/* 按钮行：贴紧下方内容 / 与下方内容留出区块间距 */
+.btn-row--tight {
+  margin-bottom: var(--sp-2);
+}
+
+.btn-row--block {
+  margin-bottom: var(--sp-4);
+}
+
+/* 结果面板里正文下的小注（8px 顶距）与首个元素去顶距 */
+.result-note {
+  margin: var(--sp-2) 0 0;
+}
+
+.flush-first {
+  margin-top: 0;
+}
+
+/* 结果分组：子标题带一个稍宽的块，与上文留一档间距 */
+.sub-block {
+  margin-top: var(--sp-3);
+}
+
+.mini-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* 文本域下的字数计数 */
+.field-count {
+  margin-top: var(--sp-1);
+}
+
+/* 结果面板顶部那条告警：与下方内容贴紧一点 */
+.notice--tight {
+  margin-bottom: var(--sp-2);
+}
+
+/* 时间线/列表里的次级行：统一一档小间距 */
+.meta-gap {
+  margin-top: var(--sp-2);
+}
+
+/* 待处理成果卡：认知族结构色走类名，不写行内色值 */
+.pending-item {
+  border-left-color: var(--agent-cognition);
+}
+
+.pending-item .evidence-quote {
+  background: var(--agent-cognition-soft);
+}
+
+/* 手动补录成果表单：一条纵向节奏，字段间距交给 grid */
+.manual-form {
+  display: grid;
+  gap: var(--sp-4);
+  margin-top: 14px;
+}
+
+/* 卡片内的小区块之间留一档整块间距 */
+.sub-group {
+  margin-bottom: var(--sp-4);
+}
+
+/* 顶栏右侧的运行状态点：靠右对齐，点与文字对齐 */
+.topbar-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 账本标签列中等宽度（介于 kv--narrow 与默认之间）：短标签用 */
+.kv.kv--mid {
+  grid-template-columns: 108px minmax(0, 1fr);
+}
+
+/* 状态强调色：错误 / 警告，替代散装 style="color: var(--danger)" */
+.is-error {
+  color: var(--danger);
+}
+
+.is-warn {
+  color: var(--warn);
+}
+
+/* 上一块不是卡片（如 grid）时，卡片自带一点顶部间距 */
+.card--top {
+  margin-top: var(--sp-4);
+}
+
+/* 闭环示意图下方的未开放说明 */
+.loop-note {
+  margin: var(--sp-3) 0 0;
+}
+
+.data--stores th:nth-child(1) {
+  width: 130px;
+}
+
+.data--stores th:nth-child(2) {
+  width: 90px;
+}
+
+.data--stores th:nth-child(3) {
+  width: 100px;
+}
+
+.data--stores th:nth-child(4) {
+  width: 90px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-opt {
+    transition: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    内页观感统一：切页进场、卡头分层、表格行反馈、等待骨架
    —— 沿用登录页那一套节奏（进场只给层次，不给静态块加"可点"的假 affordance）
    ══════════════════════════════════════════════════════════════════════ */
@@ -3213,6 +3566,19 @@ table.data tbody tr:hover {
     background: #edf1ed;
   }
 
+  /* 轨级状态线停成一条静止的绿线： still 读出「整条链路在跑」，
+     但不循环播放。节点 hover 的横向位移一并取消。 */
+  .agent-rail.is-running::before,
+  .progress-indeterminate::after {
+    animation: none;
+  }
+
+  .agent-node,
+  .agent-node:hover {
+    transition: none;
+    transform: none;
+  }
+
   .msg,
   .msg-caret {
     animation: none;
@@ -3228,6 +3594,9 @@ table.data tbody tr:hover {
   .btn:active:not(:disabled),
   .ov-entry,
   .ov-entry-arrow,
+  .ov-start-item,
+  .ov-start-item:hover,
+  .ov-start-arrow,
   .quick-item:hover:not(:disabled) {
     transform: none;
   }
@@ -3235,6 +3604,8 @@ table.data tbody tr:hover {
   .btn,
   .ov-entry,
   .ov-entry-arrow,
+  .ov-start-item,
+  .ov-start-arrow,
   .quick-item,
   .quick-go,
   .chat-input {

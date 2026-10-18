@@ -33,19 +33,15 @@ defineProps({
     <div class="card-body">
       <div v-if="!stages.length" class="empty">没有生成学习路线。</div>
 
-      <div v-else>
-        <article
-          v-for="stage in stages"
-          :key="stage.stage"
-          style="border-left: 3px solid var(--primary); padding: 0 0 0 14px; margin-bottom: 18px"
-        >
-          <h3 style="font-size: 14px">
+      <div v-else class="plan-list">
+        <article v-for="stage in stages" :key="stage.stage" class="plan-stage">
+          <h3 class="sub-title">
             阶段 {{ stage.stage }}：{{ stage.topic }}
-            <span v-if="stage.estimated_weeks" class="badge" style="margin-left: 6px">
+            <span v-if="stage.estimated_weeks" class="badge">
               约 {{ stage.estimated_weeks }} 周
             </span>
           </h3>
-          <dl class="kv" style="margin-top: 8px">
+          <dl class="kv">
             <dt>目标</dt>
             <dd>{{ stage.goal || '—' }}</dd>
             <dt>覆盖缺口</dt>

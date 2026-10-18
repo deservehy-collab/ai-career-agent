@@ -56,7 +56,7 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
 </script>
 
 <template>
-  <section class="card accent-left" :style="{ '--agent-color': 'var(--agent-cognition)' }">
+  <section class="card">
     <div class="card-head">
       <h2>
         提交结果
@@ -75,23 +75,23 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
           ① 任务完成记录
           <span class="sub">写入 runs/loop.json，这是唯一真正落盘的一步</span>
         </h3>
-        <div class="btn-row" style="margin-bottom: 8px">
+        <div class="btn-row btn-row--tight">
           <AppBadge
             :text="completionStatusText(r.completion_status)"
             :tone="completionStatusTone(r.completion_status)"
           />
           <span class="faint">磁盘写入：{{ r.completion_written ? '是' : '否' }}</span>
         </div>
-        <dl class="kv" style="grid-template-columns: 96px 1fr">
+        <dl class="kv kv--mid">
           <dt>完成时间</dt>
           <dd>{{ formatDateTime(r.task?.completed_at) }}</dd>
           <dt>提交证据</dt>
           <dd>{{ r.task?.evidence || '（空）' }}</dd>
         </dl>
-        <p v-if="r.already_completed" class="faint" style="margin: 8px 0 0">
+        <p v-if="r.already_completed" class="faint result-note">
           该任务此前已完成，本次<strong>未改动磁盘</strong>，第一次提交的证据不会被覆盖。
         </p>
-        <p v-if="!r.completion_written && !r.already_completed" class="faint" style="margin: 8px 0 0">
+        <p v-if="!r.completion_written && !r.already_completed" class="faint result-note">
           完成记录<strong>没有写入</strong>：{{ r.reason || '原因未给出' }}。
         </p>
       </div>
@@ -102,7 +102,7 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
           ② 成长成果
           <span class="sub">这条任务能否构造成一个成长事件</span>
         </h3>
-        <div class="btn-row" style="margin-bottom: 8px">
+        <div class="btn-row btn-row--tight">
           <AppBadge
             :text="eventStatusText(r.growth_event_status)"
             :tone="eventStatusTone(r.growth_event_status)"
@@ -110,7 +110,7 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
         </div>
 
         <template v-if="hasEvent">
-          <dl class="kv" style="grid-template-columns: 96px 1fr">
+          <dl class="kv kv--mid">
             <dt>成果类型</dt>
             <dd>{{ r.growth_event.type === 'project' ? '项目成果' : '学习成果' }}</dd>
             <dt>成果标题</dt>
@@ -121,7 +121,7 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
             <dd>{{ r.growth_event.evidence }}</dd>
           </dl>
         </template>
-        <p v-else class="faint" style="margin: 0">
+        <p v-else class="faint flush-first">
           没有构造成长成果：{{ r.reason || '原因未给出' }}。
           <strong>任务完成记录不受影响</strong>，只是这条任务无法作为技能升级的依据。
         </p>
@@ -139,13 +139,13 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
       </div>
 
       <!-- ③ 技能升级预览 -->
-      <div class="result-block" style="margin-bottom: 0">
+      <div class="result-block flush-last">
         <h3 class="result-title">
           ③ 技能升级预览
           <span class="sub">只是预览，不是已升级</span>
         </h3>
 
-        <div class="notice notice-warn" style="margin-bottom: 10px">
+        <div class="notice notice-warn notice--tight">
           <strong>预览尚未写入成长历史。</strong>
           本接口不会改动 <span class="mono">runs/growth.json</span>；
           技能等级正式落盘发生在「成长记录」页点击「生成下一轮」时，由 growth_node 完成。
@@ -158,7 +158,7 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
               :tone="growthOutcomeTone(r.growth_outcome)"
             />
           </div>
-          <p class="faint" style="margin: 8px 0 0">{{ r.reason || '' }}</p>
+          <p class="faint result-note">{{ r.reason || '' }}</p>
         </template>
 
         <template v-else>
@@ -172,9 +172,9 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
             </span>
           </div>
 
-          <div v-if="hasPreview" style="margin-top: 12px">
-            <h4 style="font-size: 13px; margin: 0 0 6px">预计等级变化（{{ updates.length }} 项）</h4>
-            <ul style="margin: 0; padding-left: 18px" class="muted">
+          <div v-if="hasPreview" class="sub-block">
+            <h4 class="mini-title">预计等级变化（{{ updates.length }} 项）</h4>
+            <ul class="muted mini-list">
               <li v-for="item in updates" :key="item.skill">
                 <strong>{{ item.skill }}</strong>：{{ item.from || '无' }} → {{ item.to }}
                 <span class="faint">
@@ -184,11 +184,11 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
               </li>
             </ul>
           </div>
-          <p v-else class="faint" style="margin: 8px 0 0">本次没有产生任何等级提升。</p>
+          <p v-else class="faint result-note">本次没有产生任何等级提升。</p>
 
-          <div v-if="blocked.length" style="margin-top: 12px">
-            <h4 style="font-size: 13px; margin: 0 0 6px">被前置门禁拦下（{{ blocked.length }} 项）</h4>
-            <ul style="margin: 0; padding-left: 18px" class="muted">
+          <div v-if="blocked.length" class="sub-block">
+            <h4 class="mini-title">被前置门禁拦下（{{ blocked.length }} 项）</h4>
+            <ul class="muted mini-list">
               <li v-for="item in blocked" :key="item.skill">
                 {{ item.skill }}：{{ item.current_level || '无' }} → 本可升到 {{ item.candidate_level }}
                 <span class="faint">
@@ -202,15 +202,15 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
             </ul>
           </div>
 
-          <div v-if="skipped.length" style="margin-top: 12px">
-            <h4 style="font-size: 13px; margin: 0 0 6px">未升级的候选（{{ skipped.length }} 项）</h4>
-            <ul style="margin: 0; padding-left: 18px" class="muted">
+          <div v-if="skipped.length" class="sub-block">
+            <h4 class="mini-title">未升级的候选（{{ skipped.length }} 项）</h4>
+            <ul class="muted mini-list">
               <li v-for="item in skipped" :key="item.skill">{{ item.skill }}：{{ item.reason }}</li>
             </ul>
           </div>
 
           <!-- 基线提示（措辞按约束：只说明更严格，不承诺结果一定更好） -->
-          <div v-if="isHistoryOnly" class="notice notice-warn" style="margin-top: 12px; margin-bottom: 0">
+          <div v-if="isHistoryOnly" class="notice notice-warn sub-block flush-last">
             <AppBadge
               :text="baselineSourceText(r.baseline_source)"
               :tone="baselineSourceTone(r.baseline_source)"

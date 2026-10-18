@@ -36,14 +36,14 @@ defineProps({
       <div v-if="!gaps.length" class="empty">没有能力差距数据。</div>
 
       <div v-else class="table-wrap">
-        <table class="data">
+        <table class="data data--gaps">
           <thead>
             <tr>
-              <th style="width: 150px">技能</th>
-              <th style="width: 90px">状态</th>
-              <th style="width: 70px">优先级</th>
-              <th style="width: 120px">当前 → 要求</th>
-              <th style="width: 80px">重要度</th>
+              <th>技能</th>
+              <th>状态</th>
+              <th>优先级</th>
+              <th>当前 → 要求</th>
+              <th>重要度</th>
               <th>差距说明</th>
             </tr>
           </thead>

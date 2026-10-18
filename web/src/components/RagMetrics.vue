@@ -96,7 +96,7 @@ const errors = computed(() => props.diagnostics?.errors || [])
       </div>
     </div>
 
-    <div v-else class="notice notice-info" style="margin-bottom: 0">
+    <div v-else class="notice notice-info flush-last">
       本次结果里没有检索诊断信息（后端未返回 retrieval_status 与 retrieval_diagnostics）。
     </div>
 

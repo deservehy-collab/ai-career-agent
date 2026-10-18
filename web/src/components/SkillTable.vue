@@ -31,11 +31,11 @@ defineProps({
       <div v-if="!skills.length" class="empty">没有解析出任何技能。</div>
 
       <div v-else class="table-wrap">
-        <table class="data">
+        <table class="data data--skills">
           <thead>
             <tr>
-              <th style="width: 160px">技能</th>
-              <th style="width: 90px">等级</th>
+              <th>技能</th>
+              <th>等级</th>
               <th>判断依据</th>
             </tr>
           </thead>
@@ -49,23 +49,19 @@ defineProps({
         </table>
       </div>
 
-      <div v-if="strengths.length || weaknesses.length" class="grid grid-2" style="margin-top: 16px">
+      <div v-if="strengths.length || weaknesses.length" class="grid grid-2 form-actions">
         <div>
-          <h3 style="font-size: 13px; color: var(--ok)">技术优势</h3>
-          <ul style="margin: 6px 0 0; padding-left: 18px" class="muted">
+          <h3 class="sub-title is-ok">技术优势</h3>
+          <ul class="plain-list muted">
             <li v-for="item in strengths" :key="item">{{ item }}</li>
-            <li v-if="!strengths.length" class="faint" style="list-style: none; margin-left: -18px">
-              未给出
-            </li>
+            <li v-if="!strengths.length" class="faint">未给出</li>
           </ul>
         </div>
         <div>
-          <h3 style="font-size: 13px; color: var(--warn)">技术短板</h3>
-          <ul style="margin: 6px 0 0; padding-left: 18px" class="muted">
+          <h3 class="sub-title is-warn">技术短板</h3>
+          <ul class="plain-list muted">
             <li v-for="item in weaknesses" :key="item">{{ item }}</li>
-            <li v-if="!weaknesses.length" class="faint" style="list-style: none; margin-left: -18px">
-              未给出
-            </li>
+            <li v-if="!weaknesses.length" class="faint">未给出</li>
           </ul>
         </div>
       </div>

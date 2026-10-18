@@ -46,7 +46,7 @@ async function onSubmit() {
 <template>
   <AuthShell
     title="欢迎回来"
-    subtitle="登录后进入概览与 AI 助手，账号信息只存在本机。"
+    subtitle="登录后即可开始 AI 咨询与求职规划。"
     :badge-icon="ICON_LOGIN"
   >
     <form @submit.prevent="onSubmit">
@@ -71,8 +71,8 @@ async function onSubmit() {
 
       <div class="auth-demo">
         <div class="auth-demo-text">
-          <strong>演示账号</strong>
-          <span>这台机器已内置一个可直接登录的账号</span>
+          <strong>体验账号</strong>
+          <span>一个可直接登录的体验账号</span>
           <code>{{ DEMO_ACCOUNT.username }} / {{ DEMO_ACCOUNT.password }}</code>
         </div>
         <button class="btn btn-sm" type="button" :disabled="auth.loading" @click="fillDemo">

@@ -17,7 +17,7 @@ import SkillTable from '../components/SkillTable.vue'
 import { listJds } from '../api/endpoints'
 import { useAnalysisStore } from '../stores/analysis'
 import { useProfileStore } from '../stores/profile'
-import { AGENT_GROUP, summarizeWorkflow } from '../utils/agents'
+import { summarizeWorkflow } from '../utils/agents'
 import { growthOutcomeText, growthOutcomeTone, levelTone } from '../utils/enums'
 import { joinList } from '../utils/format'
 
@@ -84,6 +84,10 @@ const targetLabel = computed(() => {
   return '跨公司概览'
 })
 
+const modeHint = computed(
+  () => TARGET_MODES.find((item) => item.value === mode.value)?.hint || '',
+)
+
 /** 前端把能提前拦下的都拦掉，避免打到后端才报 422。 */
 const blockingReason = computed(() => {
   if (!profile.canAnalyze) return '请先填写「目标岗位」——后端要求非空。'
@@ -104,16 +108,31 @@ const showWorkspace = computed(() => analysis.status !== 'idle' || !!result.valu
  */
 const workflowSummary = computed(() => summarizeWorkflow(result.value))
 
+/** 结论摘要的账本行：只填后端真给出来的字段，缺了就整行不出现。 */
+const summaryRows = computed(() => {
+  const plan = finalPlan.value
+  if (!plan) return []
+  const rows = []
+  const job = plan.target_job || analysis.targetJob
+  if (job) rows.push({ key: 'job', label: '目标岗位', value: job })
+  rows.push({ key: 'scope', label: '检索范围', value: analysis.jdLabel || '跨公司概览' })
+  if (typeof plan.learning_stage_count === 'number') {
+    rows.push({ key: 'stages', label: '学习阶段', value: `${plan.learning_stage_count} 个` })
+  }
+  rows.push({
+    key: 'projects',
+    label: '推荐项目',
+    value: `${plan.recommended_projects?.length ?? 0} 个`,
+  })
+  return rows
+})
+
 // ── 成长节点（agents/growth_agent.py 的 growth_diff）────────────────────
 const growthDiff = computed(() => result.value?.growth_diff || null)
 const levelChanges = computed(() => growthDiff.value?.level_changes || [])
 const blockedUpgrades = computed(() => growthDiff.value?.blocked_upgrades || [])
 const growthWarnings = computed(() => growthDiff.value?.warnings || [])
 const baselineSkills = computed(() => result.value?.user_skills_before || [])
-const cognitionStyle = computed(() => ({
-  '--agent-color': AGENT_GROUP.cognition.color,
-  '--agent-soft': AGENT_GROUP.cognition.soft,
-}))
 
 // ── 证据编号 → 证据面板定位 ────────────────────────────────────────────
 const activeEvidenceRef = ref('')
@@ -163,30 +182,30 @@ function handleReset() {
       </p>
     </div>
 
-    <ProfileForm />
+    <!-- 输入区：画像 + 检索范围同处一块沉底表面，白底控件浮在上面 -->
+    <section class="panel">
+      <ProfileForm />
 
-    <!-- 分析目标 -->
-    <section class="card">
-      <div class="card-head">
-        <h2>
-          分析目标
-          <span class="sub">限定检索范围，决定「真实 JD 匹配」这一节的具体程度</span>
-        </h2>
-        <AppBadge :text="targetLabel" tone="primary" />
-      </div>
+      <section class="panel-block">
+        <div class="panel-head">
+          <h2>分析目标</h2>
+          <span class="badge badge-primary">{{ targetLabel }}</span>
+        </div>
 
-      <div class="card-body">
         <div class="field">
-          <label>检索范围</label>
-          <div class="btn-row">
-            <label v-for="item in TARGET_MODES" :key="item.value" class="btn" style="font-weight: 500">
-              <input v-model="mode" type="radio" :value="item.value" style="width: auto; margin-right: 6px" />
+          <span id="an-mode-label" class="field-label">检索范围</span>
+          <div class="mode-opts" role="radiogroup" aria-labelledby="an-mode-label">
+            <label
+              v-for="item in TARGET_MODES"
+              :key="item.value"
+              class="mode-opt"
+              :class="{ 'is-on': mode === item.value }"
+            >
+              <input v-model="mode" type="radio" name="an-mode" :value="item.value" />
               {{ item.label }}
             </label>
           </div>
-          <p class="faint" style="margin: 6px 0 0">
-            {{ TARGET_MODES.find((m) => m.value === mode)?.hint }}
-          </p>
+          <p class="faint block-note">{{ modeHint }}</p>
         </div>
 
         <div v-if="mode === 'company'" class="field">
@@ -207,34 +226,30 @@ function handleReset() {
               {{ option.label }}
             </option>
           </select>
-          <p v-if="jdsError" class="faint" style="color: var(--danger); margin: 6px 0 0">
+          <p v-if="jdsError" class="notice notice-danger block-note">
             加载 JD 列表失败：{{ jdsError }}
           </p>
-          <p v-else-if="!jdsLoading && !jds.length" class="faint" style="margin: 6px 0 0">
+          <p v-else-if="!jdsLoading && !jds.length" class="faint block-note">
             知识库里还没有真实 JD（knowledge/jd 为空）。
           </p>
         </div>
 
-        <div v-if="selectedJd" class="notice notice-info" style="margin-top: 4px">
-          <dl class="kv" style="grid-template-columns: 72px 1fr">
-            <dt>岗位</dt>
-            <dd>{{ selectedJd.job_name || '—' }}</dd>
-            <dt>公司</dt>
-            <dd>{{ selectedJd.company || '—' }}</dd>
-            <dt>城市</dt>
-            <dd>{{ selectedJd.city || '—' }}</dd>
-            <dt>薪资</dt>
-            <dd>{{ selectedJd.salary || '—' }}</dd>
-            <dt>状态</dt>
-            <dd>{{ selectedJd.status || '—' }}</dd>
-          </dl>
-        </div>
+        <dl v-if="selectedJd" class="kv kv--narrow notice notice-info">
+          <dt>岗位</dt>
+          <dd>{{ selectedJd.job_name || '—' }}</dd>
+          <dt>公司</dt>
+          <dd>{{ selectedJd.company || '—' }}</dd>
+          <dt>城市</dt>
+          <dd>{{ selectedJd.city || '—' }}</dd>
+          <dt>薪资</dt>
+          <dd>{{ selectedJd.salary || '—' }}</dd>
+          <dt>状态</dt>
+          <dd>{{ selectedJd.status || '—' }}</dd>
+        </dl>
 
-        <div v-if="blockingReason" class="notice notice-warn" style="margin-top: 14px">
-          {{ blockingReason }}
-        </div>
+        <div v-if="blockingReason" class="notice notice-warn">{{ blockingReason }}</div>
 
-        <div class="btn-row" style="margin-top: 14px">
+        <div class="btn-row form-actions">
           <button
             class="btn btn-primary"
             :disabled="!!blockingReason || analysis.isRunning"
@@ -250,14 +265,12 @@ function handleReset() {
             分析不写成长历史；但首次分析会把产出的学习 / 项目计划存成第 1 轮任务（runs/loop.json）。
           </span>
         </div>
-      </div>
+      </section>
     </section>
 
     <!-- 两栏工作区：左流程轨 + 右结果 -->
     <div v-if="showWorkspace" class="layout-rail">
-      <aside class="rail">
-        <AgentPipeline :summary="workflowSummary" :status="analysis.status" />
-      </aside>
+      <AgentPipeline :summary="workflowSummary" :status="analysis.status" />
 
       <div>
         <RunProgressCard
@@ -291,48 +304,42 @@ function handleReset() {
 
         <template v-if="result">
           <!-- 汇总：final_plan 由图后的确定性汇总得出，不属于任一 Agent 节点 -->
-          <section class="card">
-            <div class="card-head">
-              <h2>
-                结论摘要
-                <span class="sub">
-                  图后汇总（build_final_plan，非 Agent 节点）
-                  · {{ finalPlan?.target_job || analysis.targetJob }} · {{ analysis.jdLabel }}
-                </span>
-              </h2>
-              <AppBadge
-                v-if="finalPlan"
-                :text="`${finalPlan.learning_stage_count} 个学习阶段 · ${finalPlan.recommended_projects?.length || 0} 个项目`"
-                tone="primary"
-              />
+          <section class="panel">
+            <div class="panel-head">
+              <h2>结论摘要</h2>
+              <span class="panel-src">graph/workflow.py · build_final_plan（非 Agent 节点）</span>
             </div>
-            <div class="card-body">
-              <div class="notice notice-info" v-if="finalPlan?.next_action">
-                <strong>下一步：</strong>{{ finalPlan.next_action }}
+
+            <dl v-if="summaryRows.length" class="ledger">
+              <div v-for="row in summaryRows" :key="row.key">
+                <dt>{{ row.label }}</dt>
+                <dd>{{ row.value }}</dd>
               </div>
-              <div class="grid grid-2">
-                <div>
-                  <h3 style="font-size: 13px">最需要补的缺口</h3>
-                  <div class="tags" style="margin-top: 8px">
-                    <span v-for="gap in finalPlan?.top_gaps || []" :key="gap" class="badge badge-danger">
-                      {{ gap }}
-                    </span>
-                    <span v-if="!(finalPlan?.top_gaps || []).length" class="faint">没有高优先级缺口</span>
-                  </div>
-                </div>
-                <div>
-                  <h3 style="font-size: 13px">已满足的岗位要求</h3>
-                  <div class="tags" style="margin-top: 8px">
-                    <span v-for="skill in finalPlan?.already_satisfied || []" :key="skill" class="badge badge-ok">
-                      {{ skill }}
-                    </span>
-                    <span v-if="!(finalPlan?.already_satisfied || []).length" class="faint">暂无</span>
-                  </div>
+            </dl>
+
+            <div v-if="finalPlan?.next_action" class="notice notice-info block-note">
+              <strong>下一步：</strong>{{ finalPlan.next_action }}
+            </div>
+
+            <div class="grid grid-2 form-actions">
+              <div>
+                <h3 class="sub-title is-warn">最需要补的缺口</h3>
+                <div class="tags">
+                  <span v-for="gap in finalPlan?.top_gaps || []" :key="gap" class="badge badge-danger">
+                    {{ gap }}
+                  </span>
+                  <span v-if="!(finalPlan?.top_gaps || []).length" class="faint">没有高优先级缺口</span>
                 </div>
               </div>
-              <p class="faint" style="margin-bottom: 0; margin-top: 14px">
-                推荐项目：{{ joinList(finalPlan?.recommended_projects) }}
-              </p>
+              <div>
+                <h3 class="sub-title is-ok">已满足的岗位要求</h3>
+                <div class="tags">
+                  <span v-for="skill in finalPlan?.already_satisfied || []" :key="skill" class="badge badge-ok">
+                    {{ skill }}
+                  </span>
+                  <span v-if="!(finalPlan?.already_satisfied || []).length" class="faint">暂无</span>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -349,7 +356,7 @@ function handleReset() {
 
           <!-- 成长追踪：growth_node 的产出（含能力基线），本轮无事件时如实说明 -->
           <div id="card-growth">
-            <section class="card accent-left" :style="cognitionStyle">
+            <section class="card">
               <div class="card-head">
                 <h2>
                   成长追踪
@@ -367,7 +374,7 @@ function handleReset() {
               <div class="card-body">
                 <div v-if="!growthDiff" class="empty">本次结果里没有成长追踪字段（growth_diff）。</div>
                 <template v-else>
-                  <div class="metric-strip" style="margin-bottom: 14px">
+                  <div class="metric-strip">
                     <div class="metric">
                       <div class="metric-label">收到成长事件</div>
                       <div class="metric-value">{{ growthDiff.events_received ?? 0 }} 条</div>
@@ -386,9 +393,9 @@ function handleReset() {
                     </div>
                   </div>
 
-                  <div v-if="baselineSkills.length" style="margin-bottom: 12px">
-                    <h3 style="font-size: 13px">合并历史后的能力基线</h3>
-                    <div class="tags" style="margin-top: 8px">
+                  <template v-if="baselineSkills.length">
+                    <h3 class="sub-title block-note">合并历史后的能力基线</h3>
+                    <div class="tags">
                       <span v-for="item in baselineSkills" :key="item.skill">
                         <AppBadge
                           :text="`${item.skill} · ${item.level || '无'}`"
@@ -396,32 +403,32 @@ function handleReset() {
                         />
                       </span>
                     </div>
-                  </div>
+                  </template>
 
-                  <div v-if="levelChanges.length">
-                    <h3 style="font-size: 13px">技能等级变化</h3>
-                    <ul style="margin: 6px 0 0; padding-left: 18px" class="muted">
+                  <template v-if="levelChanges.length">
+                    <h3 class="sub-title block-note">技能等级变化</h3>
+                    <ul class="plain-list muted">
                       <li v-for="item in levelChanges" :key="item.skill">
                         {{ item.skill }}：{{ item.from || '无' }} → {{ item.to }}
-                        <span v-if="item.source" class="faint">（来源成果：{{ item.source }}）</span>
+                        <span class="faint">（来源成果：{{ item.source }}）</span>
                       </li>
                     </ul>
-                  </div>
+                  </template>
 
-                  <div v-if="blockedUpgrades.length" style="margin-top: 12px">
-                    <h3 style="font-size: 13px">被前置门禁拦下的升级</h3>
-                    <ul style="margin: 6px 0 0; padding-left: 18px" class="muted">
+                  <template v-if="blockedUpgrades.length">
+                    <h3 class="sub-title block-note">被前置门禁拦下的升级</h3>
+                    <ul class="plain-list muted">
                       <li v-for="item in blockedUpgrades" :key="item.skill">
                         {{ item.skill }}（缺前置：{{ joinList(item.missing_prerequisites, '未给出') }}）
                       </li>
                     </ul>
-                  </div>
+                  </template>
 
-                  <div v-for="(warn, i) in growthWarnings" :key="i" class="notice notice-warn">
+                  <div v-for="(warn, i) in growthWarnings" :key="i" class="notice notice-warn block-note">
                     {{ warn }}
                   </div>
 
-                  <p class="faint" style="margin: 12px 0 0">
+                  <p class="faint block-note">
                     本页分析是<strong>只读</strong>的：不会写入成长历史（runs/growth.json）。
                     成长记录的正式写入发生在「成长记录」页的「生成下一轮」操作中。
                   </p>

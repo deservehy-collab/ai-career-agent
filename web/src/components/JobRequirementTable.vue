@@ -62,14 +62,14 @@ function levelQuote(item) {
       <div v-if="!requirements.length" class="empty">没有生成岗位要求。</div>
 
       <div v-else class="table-wrap">
-        <table class="data">
+        <table class="data data--req">
           <thead>
             <tr>
-              <th style="width: 180px">技能</th>
-              <th style="width: 86px">重要度</th>
-              <th style="width: 150px">证据强度</th>
-              <th style="width: 150px">RAG 证据</th>
-              <th style="width: 130px">来源公司</th>
+              <th>技能</th>
+              <th>重要度</th>
+              <th>证据强度</th>
+              <th>RAG 证据</th>
+              <th>来源公司</th>
               <th>说明</th>
             </tr>
           </thead>
@@ -122,7 +122,7 @@ function levelQuote(item) {
         </table>
       </div>
 
-      <p v-if="requirements.length" class="faint" style="margin: 12px 0 0">
+      <p v-if="requirements.length" class="faint block-note">
         点击 RAG 证据列的编号（如 E02），可跳转到下方「RAG 检索证据」中的对应原文。
         「模型补充（无知识库证据）」表示该要求<strong>没有</strong>知识库证据支撑，仅由模型给出。
       </p>

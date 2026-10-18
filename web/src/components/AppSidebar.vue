@@ -145,7 +145,7 @@ function onLogout() {
           </svg>
         </button>
         <div class="brand">AI Career <span>Agent</span></div>
-        <span style="margin-left: auto" :title="statusText">
+        <span class="topbar-status" :title="statusText">
           <span :class="dotClass" />
           <span class="faint">{{ statusText }}</span>
         </span>

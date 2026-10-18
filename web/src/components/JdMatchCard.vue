@@ -39,54 +39,51 @@ const keyGaps = computed(() => props.match?.key_gaps || [])
     </div>
 
     <div class="card-body">
-      <div class="grid grid-3">
-        <div class="card" style="margin: 0; box-shadow: none">
-          <div class="card-body">
-            <div class="faint">满足率</div>
-            <div style="font-size: 26px; font-weight: 700" :class="{ faint: !rateAvailable }">
-              {{ rateText }}
-            </div>
-            <div class="faint" v-if="rateAvailable">
-              分母 = 可判定要求 {{ match.requirement_judged }} 项
-            </div>
-            <div class="faint" v-else>本次没有可判定要求，因此不出满足率</div>
-          </div>
+      <!-- 统计合并成一本账：一张卡里再套三张同规格小卡，就是后台模板的指纹 -->
+      <dl class="ledger">
+        <div>
+          <dt>满足率</dt>
+          <dd :class="{ 'is-mono': rateAvailable }">{{ rateText }}</dd>
         </div>
-
-        <div class="card" style="margin: 0; box-shadow: none">
-          <div class="card-body">
-            <div class="faint">岗位要求统计</div>
-            <dl class="kv" style="margin-top: 8px; grid-template-columns: 96px 1fr">
-              <dt>有证据归属</dt>
-              <dd>{{ match.requirement_total }} 项</dd>
-              <dt>可判定</dt>
-              <dd>{{ match.requirement_judged }} 项</dd>
-              <dt>已满足</dt>
-              <dd>{{ match.requirement_satisfied }} 项</dd>
-              <dt>存在差距</dt>
-              <dd>{{ match.requirement_shortfall }} 项</dd>
-              <dt>证据不足</dt>
-              <dd>{{ match.requirement_orphan }} 项</dd>
-            </dl>
-          </div>
+        <div>
+          <dt>有证据归属的要求</dt>
+          <dd>{{ match.requirement_total }} 项</dd>
         </div>
-
-        <div class="card" style="margin: 0; box-shadow: none">
-          <div class="card-body">
-            <div class="faint">参与匹配的 JD</div>
-            <div style="font-size: 26px; font-weight: 700">{{ match.matched_jd_count }}</div>
-            <div class="faint">份来源 JD 提供了可用证据</div>
-          </div>
+        <div>
+          <dt>可判定</dt>
+          <dd>{{ match.requirement_judged }} 项</dd>
         </div>
-      </div>
+        <div>
+          <dt>已满足</dt>
+          <dd>{{ match.requirement_satisfied }} 项</dd>
+        </div>
+        <div>
+          <dt>存在差距</dt>
+          <dd>{{ match.requirement_shortfall }} 项</dd>
+        </div>
+        <div>
+          <dt>证据不足</dt>
+          <dd>{{ match.requirement_orphan }} 项</dd>
+        </div>
+        <div>
+          <dt>提供可用证据的 JD</dt>
+          <dd>{{ match.matched_jd_count }} 份</dd>
+        </div>
+      </dl>
 
-      <div v-if="warning" class="notice notice-warn" style="margin-top: 16px">
+      <p class="faint block-note">
+        {{ rateAvailable
+          ? `满足率的分母 = 可判定要求 ${match.requirement_judged} 项。`
+          : '本次没有可判定要求，因此不出满足率（不是 0%）。' }}
+      </p>
+
+      <div v-if="warning" class="notice notice-warn block-note">
         <strong>来源提示：</strong>{{ warning }}
       </div>
 
-      <div v-if="hardBlocks.length" style="margin-top: 16px">
-        <h3 style="font-size: 13px">硬性缺口候选（{{ hardBlocks.length }} 项）</h3>
-        <p class="faint" style="margin: 4px 0 8px">
+      <template v-if="hardBlocks.length">
+        <h3 class="sub-title is-warn block-note">硬性缺口候选（{{ hardBlocks.length }} 项）</h3>
+        <p class="faint">
           supported = 技能名与证据完全同名；partially_supported = 仅别名/语义相关，
           证据强度弱于前者，不等于完全确认。
         </p>
@@ -96,11 +93,11 @@ const keyGaps = computed(() => props.match?.key_gaps || [])
             · {{ block.evidence_status || '未知' }}）
           </span>
         </div>
-      </div>
+      </template>
 
-      <div v-if="keyGaps.length" style="margin-top: 16px">
-        <h3 style="font-size: 13px">关键差距（按优先级）</h3>
-        <div class="tags" style="margin-top: 8px">
+      <template v-if="keyGaps.length">
+        <h3 class="sub-title block-note">关键差距（按优先级）</h3>
+        <div class="tags">
           <span v-for="gap in keyGaps" :key="gap.skill">
             <AppBadge
               :text="`${gap.skill} · ${gap.priority || '—'} · 重要度 ${formatImportance(gap.importance)}`"
@@ -108,7 +105,7 @@ const keyGaps = computed(() => props.match?.key_gaps || [])
             />
           </span>
         </div>
-      </div>
+      </template>
     </div>
   </section>
 </template>

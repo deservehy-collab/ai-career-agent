@@ -40,7 +40,7 @@ async function onSubmit() {
 <template>
   <AuthShell
     title="创建账号"
-    subtitle="注册成功后会自动登录；密码只在本机 SQLite 里存哈希。"
+    subtitle="注册成功后自动登录，马上就能开始规划。"
     :badge-icon="ICON_SIGNUP"
   >
     <form @submit.prevent="onSubmit">
