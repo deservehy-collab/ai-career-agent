@@ -2,20 +2,27 @@
 
 接口总览
 --------
-======================  ==========================================  ==================
-方法 / 路径              作用                                        写盘？
-======================  ==========================================  ==================
-POST /api/chat/stream  AI 助手流式对话（SSE，只调本地模型）          ❌ 不写业务数据
-POST /api/analyze        只读分析（202 + run_id）                     ❌ 只读
-GET  /api/runs/{id}      查后台运行状态（排队/成功/失败 + 错误）        ❌ 只读
-POST /api/tasks/{id}/complete  登记任务完成 + 升级预览               ✅ 只写 loop.json
-GET  /api/growth/pending 待处理成长成果                             ❌ 只读
-POST /api/growth/next-round  生成下一轮计划（202 + run_id）          ✅ growth.json + loop.json
-GET  /api/growth/history 成长历史                                   ❌ 只读
-GET  /api/tasks          轮次 / 任务清单                             ❌ 只读
-GET  /api/knowledge/jds  真实 JD 元信息                             ❌ 只读
-GET  /api/health         系统状态                                   ❌ 只读
-======================  ==========================================  ==================
+======================  ==========================================  ============  ==================
+方法 / 路径              作用                                        需要登录？    写盘？
+======================  ==========================================  ============  ==================
+POST /api/auth/register 注册账号                                    ❌ 公开       ✅ users 表
+POST /api/auth/login    登录，换 JWT                                ❌ 公开       ❌ 只读 users 表
+POST /api/chat/stream  AI 助手流式对话（SSE，只调本地模型）          ✅           ❌ 不写业务数据
+POST /api/analyze        只读分析（202 + run_id；队列满 503）         ✅           ❌ 只读
+GET  /api/runs/{id}      查后台运行状态（排队/成功/失败 + 错误）      ✅           ❌ 只读
+POST /api/tasks/{id}/complete  登记任务完成 + 升级预览               ✅           ✅ 只写 loop.json
+GET  /api/growth/pending 待处理成长成果                             ✅           ❌ 只读
+POST /api/growth/next-round  生成下一轮计划（202；队列满 503）        ✅           ✅ growth.json + loop.json
+GET  /api/growth/history 成长历史                                   ✅           ❌ 只读
+GET  /api/tasks          轮次 / 任务清单                             ✅           ❌ 只读
+GET  /api/knowledge/jds  真实 JD 元信息                             ✅           ❌ 只读
+GET  /api/health         系统状态                                   ✅           ❌ 只读
+======================  ==========================================  ============  ==================
+
+除注册/登录两个入口外，**所有接口都要求 Bearer token**，包括 ``/api/health``：
+它回报本机模型与知识库的可达性，属于运维读数，不该让未登录的请求白拿一次
+全量探测（一次 health 会连 Ollama 与 Chroma）。登录页的"后端未连接"提示不
+依赖这个接口 —— 那类前置检查请继续用请求失败本身来判断。
 
 **唯一允许写成长历史的路径是 POST /api/growth/next-round**（内部经
 ``growth_node`` 走阶段五正式写入）。任务完成接口只登记完成与证据，
@@ -28,16 +35,20 @@ GET  /api/health         系统状态                                   ❌ 只�
 
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from agents.loop_store import TASK_STATUSES
 from backend import config, services
 from backend.analyze import run_workflow
 from backend.auth import get_current_user, router as auth_router
 from backend.chat import router as chat_router
+from backend.db import init_db
 from backend.deps import create_stores, create_task_manager
-from backend.jobs import STATUS_QUEUED, TaskManager
+from backend.jobs import STATUS_QUEUED, QueueFull, TaskManager
 from backend.schemas import (
     AnalyzeRequest, CompleteTaskRequest, ManualGrowthEventRequest, NextRoundRequest,
 )
@@ -45,13 +56,33 @@ from backend.services import Stores
 
 __all__ = ["app"]
 
-# 鉴权：除 /api/auth/* 与 /api/health（登录页体检用）外，所有业务接口都要求
-# Bearer token。``Depends(get_current_user)`` 可被测试全局覆盖（tests/conftest.py）。
+# 鉴权：除 /api/auth/register 与 /api/auth/login 外，所有业务接口（含 /api/health）
+# 都要求 Bearer token。``Depends(get_current_user)`` 可被测试全局覆盖（tests/conftest.py）。
 auth_required = [Depends(get_current_user)]
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """启动时把建表做掉，退出时停掉后台线程池。
+
+    建表：原先只有第一个登录/注册请求才会触发建表，冷启动时 ``users`` 表
+    可能压根不存在。幂等，重复调用无副作用。
+
+    停机：``cancel_futures=True`` 取消**还没开始**的排队任务并把它们标为失败；
+    正在跑的那一个（一次分析要几分钟推理）不强杀，等它自己结束 —— Python 会在
+    解释器退出前 join 工作线程，所以这里不假装能立刻打断它。
+    """
+    init_db()
+    try:
+        yield
+    finally:
+        create_task_manager().shutdown(wait=False, cancel_futures=True)
+
 
 app = FastAPI(
     title="AI Career Agent API",
     version="1.1.0",
+    lifespan=_lifespan,
     # 交互式文档默认关闭：接口已要求登录，Swagger 页面本身没有鉴权入口。
     docs_url=None,
     redoc_url=None,
@@ -70,6 +101,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── 全局异常口径 ─────────────────────────────────────────────────────────
+@app.exception_handler(QueueFull)
+def handle_queue_full(_request: Request, exc: QueueFull) -> JSONResponse:
+    """后台队列已满 —— 三个提交任务的 ``POST`` 由 202 变 503。
+
+    响应体刻意与 FastAPI 的 ``HTTPException`` 同构（``{"detail": "..."}``），
+    前端的 ``client.js`` 已经按 ``detail`` 读错误文案，不需要为这个状态码特判。
+    """
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
 # 认证路由：/api/auth/register|login|me|logout（register/login 公开，me/logout 自带鉴权）
 app.include_router(auth_router)
 
@@ -80,9 +122,12 @@ app.include_router(chat_router, dependencies=auth_required)
 
 
 # ── 健康检查 ────────────────────────────────────────────────────────────
-@app.get("/api/health", tags=["system"], summary="系统状态")
+@app.get("/api/health", tags=["system"], summary="系统状态", dependencies=auth_required)
 def get_health(stores: Stores = Depends(create_stores)) -> dict:
-    """报告 Ollama / Chroma 索引 / 知识库 / 两个 store 的可达性与可写性。只读。"""
+    """报告 Ollama / Chroma 索引 / 知识库 / 两个 store 的可达性与可写性。只读。
+
+    要求登录：未登录的请求不该白拿一次全量探测（本接口会连 Ollama 与 Chroma）。
+    """
     return services.health(stores)
 
 
@@ -98,6 +143,8 @@ def post_analyze(
     所以这里只排队；用 ``GET /api/runs/{run_id}`` 查进度与结果。
 
     **绝不写 runs/** —— 由 ``backend.analyze._isolated_growth_store`` 保证。
+
+    队列已满（``config.TASK_QUEUE_CAP``）时返回 **503**，不创建 run_id。
     """
     run_id = manager.submit(run_workflow, payload, kind="analyze")
     return {"status": STATUS_QUEUED, "run_id": run_id, "kind": "analyze"}
@@ -113,6 +160,8 @@ def post_analyze_and_save(
 
     这是根治"分析完还是没有任务"冷启动死锁的入口：第一次分析即生成第 1 轮
     任务，翻开「学习与项目」页就能看到。已有轮次时保持只读语义、不重复追加。
+
+    队列已满时返回 **503**，不创建 run_id。
     """
     run_id = manager.submit(
         services.run_analyze_and_save, stores, payload, kind="analyze_and_save"
@@ -205,6 +254,8 @@ def post_next_round(
     （``TaskManager(max_workers=1)``），否则并发的成长写入会互相覆盖。
 
     没有待处理成果时不会跑模型，也不会凭空新建轮次。
+
+    队列已满时同样返回 **503**，不创建 run_id。
     """
     profile = payload.user_profile.model_dump() if payload and payload.user_profile else None
     target_job = payload.target_job if payload else None

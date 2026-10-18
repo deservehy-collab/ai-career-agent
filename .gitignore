@@ -22,6 +22,8 @@ knowledge/index/
 #
 # 测试文件一律不入库（仅保留在本地）
 tests/
+# 例外：backend/tests/ 是后端 P0 的并发/生命周期回归用例，入库留档
+!backend/tests/
 
 # 本地验收报告与本地文档（仅保留在本地，不进入 GitHub 提交）
 报告路径.json

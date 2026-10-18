@@ -26,6 +26,7 @@ __all__ = [
     "SKILLS_DIR", "PROJECTS_DIR",
     "CHAT_MODEL", "EMBEDDING_MODEL", "OLLAMA_BASE_URL", "OLLAMA_TAGS_PATH",
     "HOST", "PORT", "CORS_ORIGINS", "EVIDENCE_MAX_LENGTH", "TASK_WORKERS",
+    "TASK_RECORD_CAP", "TASK_QUEUE_CAP",
     "AUTH_DB_PATH", "JWT_SECRET_PATH", "JWT_ALGORITHM", "JWT_TTL_HOURS",
     "USERNAME_MIN_LENGTH", "USERNAME_MAX_LENGTH", "PASSWORD_MIN_LENGTH",
 ]
@@ -64,6 +65,17 @@ EVIDENCE_MAX_LENGTH = 5000
 # 读-改-写只在进程内串行安全（见 tests/test_readonly_boundary.py），
 # 且分析链路的成长存储隔离会临时改写进程级全局 store。
 TASK_WORKERS = 1
+
+# 后台运行记录的保留上限。记录只存在内存里（进程级单例），原先没有任何上限，
+# 一次分析产出的完整 state 会一直挂在 ``TaskManager._records`` 上。
+# 淘汰只发生在**已终态**的最旧记录上（queued / running 永不淘汰），
+# 被淘汰的 run_id 之后查询返回 404。
+TASK_RECORD_CAP = 200
+
+# 同时"在跑或排队"的任务数上限。单 worker + 一次七节点推理要几分钟，
+# 没有上限时双击"开始分析"会排出一串重复任务，白等也白算。
+# 超出后 ``POST`` 直接 503（不是 202），前端按错误提示处理。
+TASK_QUEUE_CAP = 3
 
 # ── 认证（登录 / 用户数据库）─────────────────────────────────────────────
 # SQLite 与 JWT 密钥都放在 runs/ 下：那里本就是"可再生成的运行数据"目录，

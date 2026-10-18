@@ -83,33 +83,38 @@ class Stores:
 
 # ── 任务完成（只写 loop.json）────────────────────────────────────────────
 
-# 进程内互斥锁：保护"任务完成"这一整段读—改—写。
+# 进程内互斥锁：保护 ``loop.json`` 的**全部**读—改—写。
 #
 # 为什么需要
 # ----------
-# ``LoopStore.mark_completed()`` 的实现是「``load()`` 读全量 → 深拷贝改副本 →
-# ``_write()`` 原子替换」。``_write`` 的"原子"只保证**文件替换**不半途而废，
-# **不保证两次读—改—写之间不互相覆盖**：两个线程各自读到同一份基线，
-# 后写的那个会把先写的完成记录整条丢掉（丢失更新）。
-# 存储层自身没有任何锁（``agents/loop_store.py`` 不 import threading），
-# 而本次不允许改动 ``agents/``，所以在**服务层**补这把锁。
+# ``LoopStore`` 的每次写入都是「``load()`` 读全量 → 深拷贝改副本 → ``_write()`` 原子
+# 替换」。``_write`` 的"原子"只保证**文件替换**不半途而废，**不保证两次读—改—写之间
+# 不互相覆盖**：两个线程各自读到同一份基线，后写的那个会把先写的整条丢掉（丢失更新）。
+# 存储层自身没有任何锁（``agents/loop_store.py`` 不 import threading），所以在**服务层**
+# 补这把锁。
 #
-# 保护范围
-# --------
-# 只包住 ``complete_task`` 这一次调用，即"查询任务 → 标记完成 → 写盘 → 成长预览"
-# 的完整过程 —— 而不是只锁 ``_write``。只锁写是不够的：两个线程仍会基于
-# **同一份读到的旧数据**各写一次，丢失更新照旧发生。
-# 升级预览是纯规则计算（读 YAML 词表与技能库，**不调模型**），耗时毫秒级，
-# 一起放进临界区付出的代价可以忽略，换来的是"完成记录 + 预览"读数一致。
+# 保护范围：按"写入方"划，不按"接口名"划
+# ----------------------------------------
+# 会写 ``loop.json`` 的路径有四条，**四条都在锁内**，缺一条就前功尽弃：
+#
+# 1. :func:`complete_task` —— ``mark_completed``（HTTP 请求线程，会真正并发）
+# 2. :func:`add_manual_event` —— ``append_round`` + ``mark_completed`` 两段
+# 3. :func:`_run_next_round` —— 下一轮规划末尾的 ``append_round``（后台工作线程）
+# 4. :func:`run_analyze_and_save` —— 首轮任务的 ``append_round``（后台工作线程）
+#
+# 临界区只包住**读写本身**（毫秒级），绝不把 ``workflow.invoke`` 那几分钟的模型推理
+# 放进去 —— 否则一次「生成下一轮」会把同时提交的任务完成堵死。临界区里只做
+# 纯规则计算与文件读写：升级预览读 YAML 词表与技能库，**不调模型**。
 #
 # 边界（不要误用）
 # ----------------
 # - **不是跨进程锁**：只对本进程内的线程有效。服务仍必须 ``--workers 1``，
-#   多 worker / 多副本部署时这把锁形同虚设，存储层依旧会丢更新。
-# - **不扩展到分析或下一轮规划**：分析链路走 ``TaskManager`` 单工作线程，
-#   下一轮规划同样如此；只有"任务完成"是同步请求、会真正并发，所以只锁它。
+#   多 worker / 同时跑 ``main.py`` CLI 时这把锁形同虚设（根治要靠业务数据进数据库）。
+# - **不保护"读到的基线有多新"**：``_run_next_round`` 开头的 ``pending_growth_events``
+#   与推理之间可能有新完成的任务落盘，那条成果**不会**丢 —— 指纹没进成长历史，
+#   下一次「生成下一轮」仍会排队（见 agents/growth_loop.py 的判据）。
 # - 用 ``RLock`` 而非 ``Lock``：同一线程重入不会自锁死，互斥性不受影响。
-_TASK_COMPLETION_LOCK = threading.RLock()
+_STORE_WRITE_LOCK = threading.RLock()
 
 
 def complete_task(
@@ -127,11 +132,11 @@ def complete_task(
     - ``unknown_task`` → 404
     - ``invalid_task_id`` → 422
 
-    整段调用在 :data:`_TASK_COMPLETION_LOCK` 临界区内执行：并发提交**不同**任务时
+    整段调用在 :data:`_STORE_WRITE_LOCK` 临界区内执行：并发提交**不同**任务时
     逐个串行落盘，不会互相覆盖；重复提交**同一**任务仍由 ``mark_completed``
     返回 ``already_completed``，首次证据不被覆盖。
     """
-    with _TASK_COMPLETION_LOCK:
+    with _STORE_WRITE_LOCK:
         return process_task_completion(
             task_id,
             evidence=evidence,
@@ -182,7 +187,7 @@ def add_manual_event(
 
     ``target_job`` 缺省时沿用最近一轮的 ``target_job``（都拿不到则为空字符串）。
 
-    在 :data:`_TASK_COMPLETION_LOCK` 临界区内执行：append + complete 是两段
+    在 :data:`_STORE_WRITE_LOCK` 临界区内执行：append + complete 是两段
     独立的读—改—写，必须串行，否则并发请求会互相覆盖。
     """
     if kind not in (KIND_LEARNING, KIND_PROJECT):
@@ -208,7 +213,7 @@ def add_manual_event(
         learning_plan = []
         project_plan = [{"name": title, "covers_gaps": skills}]
 
-    with _TASK_COMPLETION_LOCK:
+    with _STORE_WRITE_LOCK:
         appended = stores.loop.append_round(target, learning_plan, project_plan)
         if appended.get("status") != WRITE_OK:
             return {
@@ -283,12 +288,19 @@ def run_analyze_and_save(stores: Stores, payload) -> dict:
     warning = None
 
     if learning_plan or project_plan:
-        written = loop.append_round(target, learning_plan, project_plan)
-        if written.get("status") == WRITE_OK:
-            round_created = True
-            round_no = written.get("round")
-        else:
-            warning = written.get("warning") or "计划未能保存"
+        with _STORE_WRITE_LOCK:
+            # 锁内**重读**再决定：上面那几分钟推理里，别的写入方可能已经建了轮次
+            # （用户同时提交手动补录、或另一条分析恰好落盘）。早退分支用的
+            # latest_round 是推理**之前**的快照，不重读就会多建一轮重复任务。
+            if loop.latest_round() is not None:
+                warning = "分析期间已存在轮次，本次未重复创建任务（任务已在「学习与项目」页）。"
+            else:
+                written = loop.append_round(target, learning_plan, project_plan)
+                if written.get("status") == WRITE_OK:
+                    round_created = True
+                    round_no = written.get("round")
+                else:
+                    warning = written.get("warning") or "计划未能保存"
     else:
         warning = "本次分析没有生成学习/项目计划，未创建任务轮次。"
 
@@ -387,7 +399,10 @@ def _run_next_round(
     if not learning_plan and not project_plan:
         warning = "本轮没有生成任何学习/项目计划，未创建轮次（不记录空轮次）"
     else:
-        written = loop.append_round(resolved_target, learning_plan, project_plan)
+        # 锁只包住落盘这一段（毫秒级），**不含**上面 workflow.invoke 的几分钟推理 ——
+        # 否则一次「生成下一轮」会把同时提交的任务完成整整堵死几分钟。
+        with _STORE_WRITE_LOCK:
+            written = loop.append_round(resolved_target, learning_plan, project_plan)
         if written.get("status") == WRITE_OK:
             round_created = True
             round_no = written.get("round")

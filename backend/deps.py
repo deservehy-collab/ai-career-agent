@@ -40,7 +40,11 @@ def _default_task_manager() -> TaskManager:
     必须是单例：``GET /api/runs/{run_id}`` 要能查到 ``POST`` 时提交的那个 run，
     如果每次依赖注入都新建一个 TaskManager，记录就丢了。
     """
-    return TaskManager(max_workers=config.TASK_WORKERS)
+    return TaskManager(
+        max_workers=config.TASK_WORKERS,
+        max_records=config.TASK_RECORD_CAP,
+        max_pending=config.TASK_QUEUE_CAP,
+    )
 
 
 def create_task_manager() -> TaskManager:
