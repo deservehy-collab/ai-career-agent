@@ -1,16 +1,14 @@
 <script setup>
 /**
- * 认证页骨架：左侧品牌区 + 右侧表单区。
+ * 认证页骨架：左品牌区 + 右表单卡。
  *
  * 品牌区只回答使用者真正关心的两件事 —— 这是一个什么平台、登录后能干什么，
  * 用大白话说清楚，不摆工作流节点、源码路径、系统健康探测这类实现细节。
- * 整页纯静态、不发任何请求。
+ * 整页纯静态、不发任何请求；成长轨迹卡是示意图，数字不是真实读数。
  */
 defineProps({
   title: { type: String, required: true },
   subtitle: { type: String, default: '' },
-  // 卡片头部的图标徽章（24×24 stroke 路径）；不传就不渲染徽章，只留标题
-  badgeIcon: { type: String, default: '' },
 })
 
 const intro =
@@ -21,7 +19,7 @@ const capabilities = [
   {
     key: 'ask',
     title: '随时问 AI 助手',
-    desc: '岗位方向、学习顺序、简历与面试，想到就问。',
+    desc: '岗位方向、学习顺序、简历面试，想到就问。',
     icon: 'M4 5h16v10H9l-5 4z M8 9h8 M8 12h5',
   },
   {
@@ -43,20 +41,27 @@ const capabilities = [
     icon: 'M3 17l6-6 4 4 8-9 M21 6h-5 M21 6v5',
   },
 ]
+
+// 四段等级条 = 未掌握 / 初级 / 中级 / 高级。示例里最高只到「中级」，
+// 因为规则上学习类封顶初级、项目类封顶中级，「高级」不由任务授予。
+const MAX_LEVEL = 4
+const ladder = [
+  { key: 'rag', skill: '向量检索 RAG', level: 3, change: '初级 → 中级', up: true },
+  { key: 'graph', skill: 'LangGraph 编排', level: 2, change: '初级', up: false },
+  { key: 'deliver', skill: '项目交付', level: 3, change: '中级', up: false },
+]
 </script>
 
 <template>
   <div class="auth-shell">
     <section class="auth-brand">
       <div class="auth-brand-inner">
-        <div class="auth-brand-head">
+        <div class="auth-mark">
           <span class="auth-logo">CA</span>
-          <div>
-            <h1 class="auth-product">AI Career <span>Agent</span></h1>
-            <p class="auth-slogan">让 AI 帮你规划下一步职业成长</p>
-          </div>
+          <span class="auth-mark-name">AI Career Agent</span>
         </div>
 
+        <h1 class="auth-headline">让 AI 帮你规划<br /><em>下一步</em>职业成长</h1>
         <p class="auth-intro">{{ intro }}</p>
 
         <ul class="auth-pillars">
@@ -66,7 +71,7 @@ const capabilities = [
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="1.8"
+                stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
@@ -79,24 +84,37 @@ const capabilities = [
             </div>
           </li>
         </ul>
+
+        <div class="auth-ladder">
+          <div class="auth-ladder-head">
+            <span class="auth-ladder-title">成长轨迹</span>
+            <span class="auth-ladder-round mono">示例 · 第 3 轮</span>
+          </div>
+          <div class="auth-ladder-rows">
+            <div v-for="row in ladder" :key="row.key" class="auth-ladder-row">
+              <span class="auth-ladder-skill">{{ row.skill }}</span>
+              <span
+                class="auth-ladder-level"
+                :class="{ 'is-up': row.up }"
+              >{{ row.change }}</span>
+              <span class="auth-ladder-bars" aria-hidden="true">
+                <i
+                  v-for="n in MAX_LEVEL"
+                  :key="n"
+                  class="auth-ladder-seg"
+                  :class="{ 'is-on': n <= row.level }"
+                ></i>
+              </span>
+            </div>
+          </div>
+          <p class="auth-ladder-note">每完成一项任务就记一次，等级每轮最多升一档、只升不降。</p>
+        </div>
       </div>
     </section>
 
     <section class="auth-panel">
       <div class="auth-form">
         <header class="auth-form-head">
-          <span v-if="badgeIcon" class="auth-badge" aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path :d="badgeIcon" />
-            </svg>
-          </span>
           <h2>{{ title }}</h2>
           <p v-if="subtitle">{{ subtitle }}</p>
         </header>
@@ -107,6 +125,21 @@ const capabilities = [
           <slot name="foot" />
         </footer>
       </div>
+
+      <p class="auth-trust">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 3l8 3v6c0 4.5-3.4 7.6-8 9-4.6-1.4-8-4.5-8-9V6z" />
+        </svg>
+        <span>画像与成长记录都保存在你自己的电脑上</span>
+      </p>
     </section>
   </div>
 </template>

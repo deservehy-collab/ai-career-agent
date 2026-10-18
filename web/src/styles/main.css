@@ -1979,239 +1979,311 @@ button.chip {
 /* ── 登录 / 注册：左品牌区 + 右表单区分栏 ─────────────────────────────
    两页共用 AuthShell / AuthField，样式全在这组 .auth-* 类里，
    不复用 .card —— 认证页不该长得像系统内部的一张卡片。 */
+/* 森林绿只在这两个页面生效：改 .auth-shell 上的变量，靠级联覆盖内部所有
+   .btn-primary / input / label / a。全站 --primary 不动，推不推全站另说。 */
 .auth-shell {
+  --primary: #1e5c46;
+  --primary-dark: #14452f;
+  --primary-soft: #eaf1ec;
+  --primary-rgb: 30, 92, 70;
+  --mint: #e8f5f0;
+  --bg: #f7f8f6;
+  --surface-warm: #fafbf9;
+  --text: #131c18;
+  --text-muted: #46534c;
+  --text-faint: #7c8b84;
+  --border: #e4e8e3;
+  --border-strong: #d8ded7;
+  --focus-ring: 0 0 0 4px rgba(30, 92, 70, 0.13);
+  /* 悬浮感靠阴影分层，不靠描边和渐变：近层定形状，远层大扩散制造高度 */
+  --auth-shadow-card: 0 1px 2px rgba(19, 28, 24, 0.04), 0 2px 6px rgba(19, 28, 24, 0.04),
+    0 24px 48px -24px rgba(19, 28, 24, 0.16);
+  --auth-shadow-soft: 0 1px 2px rgba(19, 28, 24, 0.04), 0 12px 28px -18px rgba(19, 28, 24, 0.12);
+
   display: flex;
   min-height: 100vh;
-  max-width: 1440px;
-  margin: 0 auto;
-  background: var(--surface);
-  border-inline: 1px solid var(--border);
+  /* 渐变要铺满整屏，所以容器不再限宽：超宽屏下若容器本身停在 1320px，
+     渐变会在左右两侧各留一条没染到的白边。内容改用 padding-inline 收在
+     1320px 内，视觉宽度不变。 */
+  padding-inline: max(24px, calc((100% - 1320px) / 2));
+  background: linear-gradient(135deg, var(--mint) 0%, #ffffff 45%, #ffffff 100%);
 }
 
+/* 47% 是给左栏留够实宽的：再窄一档，能力清单就会从两列掉回单列，
+   品牌区被拉得比表单卡还长，首屏重心跑到左边。 */
 .auth-brand {
-  flex: 0 0 44%;
+  flex: 0 0 47%;
   display: flex;
   align-items: center;
-  position: relative;
-  overflow: hidden;
-  padding: 48px clamp(32px, 5vw, 72px);
-  background: linear-gradient(155deg, #eaf4ee 0%, #f2f8f4 52%, var(--bg) 100%);
-  border-right: 1px solid var(--border);
-}
-
-/* 低对比装饰光斑：静态径向渐变，不做模糊玻璃 */
-.auth-brand::before,
-.auth-brand::after {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.auth-brand::before {
-  width: 420px;
-  height: 420px;
-  top: -130px;
-  right: -140px;
-  background: radial-gradient(circle, rgba(var(--primary-rgb), 0.16), rgba(var(--primary-rgb), 0) 70%);
-}
-
-.auth-brand::after {
-  width: 360px;
-  height: 360px;
-  bottom: -150px;
-  left: -120px;
-  background: radial-gradient(circle, rgba(58, 108, 171, 0.12), rgba(58, 108, 171, 0) 70%);
+  padding: 48px clamp(28px, 4vw, 60px);
 }
 
 .auth-brand-inner {
-  position: relative; /* 盖在光斑之上 */
-  max-width: 500px;
+  max-width: 520px;
   animation: auth-rise 0.32s ease-out both;
 }
 
-.auth-brand-head {
+.auth-mark {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 26px;
+  gap: 10px;
+  margin-bottom: 40px;
 }
 
 .auth-logo {
-  flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius);
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   background: var(--primary);
   color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: var(--fs-h2);
-  letter-spacing: 0.5px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 500;
+  font-size: var(--fs-sm);
+  letter-spacing: -0.3px;
 }
 
-.auth-product {
-  font-size: var(--fs-h1);
-  font-weight: 700;
-  letter-spacing: 0.2px;
+.auth-mark-name {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  letter-spacing: -0.2px;
   color: var(--text);
 }
 
-.auth-product span {
-  color: var(--primary-dark);
+/* 首屏主张：字号要有版面重量，否则整页只剩"染色的边框" */
+.auth-headline {
+  margin: 0 0 20px;
+  font-size: clamp(30px, 3.4vw, 46px);
+  font-weight: 700;
+  line-height: 1.22;
+  letter-spacing: -0.5px;
+  color: var(--text);
 }
 
-.auth-slogan {
-  margin: 5px 0 0;
-  font-size: var(--fs-body);
-  color: var(--text-muted);
+.auth-headline em {
+  font-style: normal;
+  color: var(--primary);
 }
 
 .auth-intro {
-  margin: 0 0 26px;
-  max-width: 40ch;
-  font-size: var(--fs-body);
-  line-height: 1.65;
+  margin: 0 0 36px;
+  max-width: 46ch;
+  font-size: var(--fs-lead);
+  line-height: 1.75;
   color: var(--text-muted);
 }
 
+/* 能力清单排成两列：四条一列会顶到首屏之外，两列能留在主张下方一眼看完 */
 .auth-pillars {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(198px, 1fr));
+  gap: 20px 28px;
 }
 
 .auth-pillars li {
   display: flex;
   align-items: flex-start;
-  gap: 13px;
+  gap: 14px;
 }
 
-/* 每条能力配一枚柔和的图标徽章：白底高光 + 主色描边，让品牌区精致但不喧哗 */
+/* 圆形薄荷底。刻意不用 --mint 实色：图标正好落在渐变最绿的左上区域，
+   同色会糊成一片。改用主色 12% 透明底 —— 白底上看是薄荷，压在渐变上
+   仍深一档，两种背景下都有对比。图标本身要压到 20px + 深主色：18px 细
+   线放在这圈淡底上几乎看不见，第 4 个上升箭头最先糊掉。 */
 .auth-pillar-icon {
-  flex: 0 0 38px;
-  width: 38px;
-  height: 38px;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 11px;
-  background: var(--primary-soft);
-  color: var(--primary-dark);
-  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(var(--primary-rgb), 0.14);
+  border-radius: 50%;
+  background: rgba(var(--primary-rgb), 0.12);
+  box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.1);
 }
 
+/* color 只能落在 svg 上：说明文字那条 .auth-pillars span (0,1,1) 会盖掉
+   .auth-pillar-icon (0,1,0) 的 color，图标于是一直是灰色。 */
 .auth-pillar-icon svg {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
+  color: var(--primary-dark);
 }
 
 .auth-pillars strong {
   display: block;
-  font-size: var(--fs-body);
+  font-size: var(--fs-sm);
   font-weight: 600;
+  line-height: 1.4;
   color: var(--text);
 }
 
 .auth-pillars span {
   display: block;
-  margin-top: 2px;
-  font-size: var(--fs-sm);
-  line-height: 1.5;
-  color: var(--text-muted);
+  margin-top: 3px;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--text-faint);
 }
 
+/* ── 成长轨迹卡：品牌区的唯一"作品展示"，纯静态、不发请求 ─────────────
+   四段等级条对应真实的四档能力等级，"每轮最多升一档"对应 growth_rules 的 R2。 */
+.auth-ladder {
+  margin-top: 40px;
+  max-width: 520px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--auth-shadow-soft);
+  animation: auth-rise 0.32s ease-out 0.12s both;
+}
+
+.auth-ladder-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.auth-ladder-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.auth-ladder-round {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.auth-ladder-rows {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.auth-ladder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-ladder-skill {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 等级条放在技能名下方：两列布局下不会被长技能名挤掉，窄屏也不用重排 */
+.auth-ladder-bars {
+  grid-column: 1;
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.auth-ladder-seg {
+  width: 26px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.auth-ladder-seg.is-on {
+  background: var(--primary);
+}
+
+.auth-ladder-level {
+  grid-row: 1;
+  grid-column: 2;
+  align-self: start;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* 本轮升过级的条目：绿色 + 箭头是这页唯一一处强调，别的地方都要让位 */
+.auth-ladder-level.is-up {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.auth-ladder-note {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
+/* 表单是浮起的白卡：浅底 + 极淡描边 + 三层阴影。
+   横向内边距刻意收窄，让 440px 的卡片两侧留出空气 —— 卡片被空着包围，
+   而不是被列宽塞满，这是"悬浮"和"贴上去"的差别。 */
 .auth-panel {
   flex: 1 1 auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  position: relative;
-  padding: 48px clamp(24px, 6vw, 88px);
-  background:
-    radial-gradient(circle at 50% 42%, rgba(var(--primary-rgb), 0.12), rgba(var(--primary-rgb), 0) 58%),
-    linear-gradient(180deg, #f4f9f6 0%, var(--bg) 100%);
+  padding: 48px clamp(24px, 4vw, 56px);
 }
 
-/* 极淡点阵底纹：只给右栏加纵深，不承载任何信息 */
-.auth-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(rgba(var(--primary-rgb), 0.16) 1px, transparent 1px);
-  background-size: 18px 18px;
-  opacity: 0.45;
-  pointer-events: none;
-}
-
-/* 表单是浮起的白卡：浅底 + 边框 + 一层柔阴影，不再裸贴在白色背景上 */
+/* 表单卡本体 */
 .auth-form {
-  position: relative; /* 浮到点阵纹理之上 */
   width: 100%;
-  max-width: 404px;
-  padding: 30px 30px 26px;
+  max-width: 440px;
+  padding: 36px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--surface);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--auth-shadow-card);
   animation: auth-rise 0.32s ease-out 0.06s both;
 }
 
-/* 卡片顶边一条主色→浅蓝的渐变描边，替代一整条分隔线 */
-.auth-form::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: 14px;
-  right: 14px;
-  height: 3px;
-  border-radius: 0 0 4px 4px;
-  background: linear-gradient(90deg, var(--primary), var(--aux-blue));
-}
-
 .auth-form-head {
-  margin-bottom: 22px;
-}
-
-.auth-badge {
-  width: 46px;
-  height: 46px;
-  margin-bottom: 15px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #d8ece2;
-  background: var(--primary-soft);
-  color: var(--primary-dark);
-}
-
-.auth-badge svg {
-  width: 21px;
-  height: 21px;
+  margin-bottom: 28px;
 }
 
 .auth-form-head h2 {
   font-size: var(--fs-display);
-  letter-spacing: 0.2px;
   font-weight: 700;
+  letter-spacing: -0.3px;
   color: var(--text);
 }
 
 .auth-form-head p {
-  margin: 9px 0 0;
+  margin: 8px 0 0;
   font-size: var(--fs-sm);
   line-height: 1.6;
-  color: var(--text-muted);
+  color: var(--text-faint);
 }
 
-/* ── 输入框：内嵌图标 + 显隐密码 ────────────────────────────────────── */
+/* ── 输入框：标签在上、无内嵌图标，只保留密码显隐 ────────────────────
+   去掉图标是为了让左边缘对齐成一条线；显隐密码是功能，留下。 */
 .auth-field {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+.auth-field > label {
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+
+.auth-field:focus-within > label {
+  color: var(--primary);
 }
 
 .auth-input-wrap {
@@ -2220,43 +2292,32 @@ button.chip {
   align-items: center;
 }
 
-.auth-input-icon {
-  position: absolute;
-  left: 11px;
-  width: 16px;
-  height: 16px;
-  color: var(--text-faint);
-  pointer-events: none;
-  transition: color 0.15s ease;
-}
-
-.auth-input-wrap:focus-within .auth-input-icon {
-  color: var(--primary-dark);
-}
-
-.auth-input-wrap:focus-within .auth-input {
-  background: #f8fcf9;
-}
-
-/* 双类名才能盖过全局 input[type=…] 的 padding 简写；44px 高是把认证表单
+/* 双类名才能盖过全局 input[type=…] 的 padding 简写；48px 高是把认证表单
    和内容页 14px 密度的输入框拉开层级的主要手段 */
 .auth-input-wrap .auth-input {
-  min-height: 44px;
-  padding-left: 36px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-color: var(--border);
   border-radius: 10px;
+  background: var(--bg);
   font-size: var(--fs-body);
 }
 
+.auth-input-wrap .auth-input:focus {
+  background: var(--surface);
+}
+
 .auth-input-wrap .auth-input--password {
-  padding-right: 38px;
+  padding-right: 40px;
 }
 
 .auth-reveal {
   position: absolute;
-  right: 5px;
+  right: 6px;
   display: inline-flex;
-  padding: 6px;
+  padding: 8px;
   border: none;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
@@ -2268,12 +2329,12 @@ button.chip {
 }
 
 .auth-reveal svg {
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
 }
 
 .auth-hint {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   font-size: var(--fs-xs);
   color: var(--text-faint);
 }
@@ -2301,73 +2362,89 @@ button.chip {
   margin-top: 2px;
 }
 
+/* 体验账号条：左读数右动作，一行解决。底色用主色浅档 + 实描边，
+   视觉重量刻意低于实心绿色的「登录」按钮，不跟它抢。 */
 .auth-demo {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 2px 0 16px;
-  padding: 10px 12px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-warm);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-/* 只有指针真的落在「一键填入」上时整块才亮，避免静态信息卡假装可点 */
-.auth-demo:has(.btn:hover) {
-  border-color: var(--primary);
+  margin: 2px 0 20px;
+  padding: 12px 16px;
+  border: 1px solid rgba(var(--primary-rgb), 0.12);
+  border-radius: 10px;
   background: var(--primary-soft);
 }
 
 .auth-demo-text {
   display: grid;
-  gap: 1px;
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
+  gap: 2px;
   min-width: 0;
 }
 
 .auth-demo-text strong {
   font-size: var(--fs-xs);
-  color: var(--text);
+  font-weight: 600;
+  color: var(--primary-dark);
 }
 
 .auth-demo-text code {
-  font-family: Consolas, "Courier New", monospace;
+  font-family: ui-monospace, Consolas, monospace;
   font-size: var(--fs-xs);
-  color: var(--primary-dark);
+  color: var(--primary);
+  overflow-wrap: anywhere;
 }
 
 .auth-submit {
   width: 100%;
-  min-height: 44px;
-  margin-top: 6px;
-  padding: 11px 16px;
+  min-height: 48px;
+  margin-top: 4px;
+  padding: 12px 16px;
+  border-radius: 10px;
   font-size: var(--fs-body);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(var(--primary-rgb), 0.24);
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .auth-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.22);
+  box-shadow: 0 10px 24px -10px rgba(var(--primary-rgb), 0.5);
 }
 
 .auth-submit:active:not(:disabled) {
   transform: none;
-  box-shadow: none;
+  box-shadow: 0 1px 2px rgba(var(--primary-rgb), 0.24);
 }
 
 .auth-foot {
-  margin-top: 20px;
+  margin-top: 24px;
   text-align: center;
   font-size: var(--fs-sm);
-  color: var(--text-muted);
+  color: var(--text-faint);
 }
 
 .auth-switch {
-  color: var(--primary-dark);
+  color: var(--primary);
   font-weight: 600;
+}
+
+/* 卡片下方一行信任说明：这是使用者真正在意的（数据在哪），不是运维读数 */
+.auth-trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%; /* 窄屏下 .auth-panel 是 flex-start，靠自身撑满才能居中 */
+  margin: 24px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.auth-trust svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
 }
 
 /* 动效只做两件事：进场给层次，报错给提醒。不做循环动画。 */
@@ -2402,6 +2479,7 @@ button.chip {
 
 @media (prefers-reduced-motion: reduce) {
   .auth-brand-inner,
+  .auth-ladder,
   .auth-form,
   .auth-alert {
     animation: none;
@@ -2413,30 +2491,37 @@ button.chip {
 
   .auth-submit:hover:not(:disabled) {
     transform: none;
-    box-shadow: none;
+    box-shadow: 0 1px 2px rgba(var(--primary-rgb), 0.24);
   }
 }
 
 @media (max-width: 900px) {
   .auth-shell {
     flex-direction: column;
-    border-inline: none;
   }
 
   .auth-brand {
     flex: none;
     padding: 26px 20px;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
   }
 
-  .auth-brand-head {
-    margin-bottom: 0;
+  .auth-mark {
+    margin-bottom: 20px;
   }
 
-  /* 窄屏首屏寸土寸金：能力清单让位给表单，只保留品牌与一句话定位 */
-  .auth-pillars {
+  .auth-headline {
+    margin-bottom: 12px;
+    font-size: 26px;
+  }
+
+  /* 窄屏首屏寸土寸金：能力清单与轨迹卡让位给表单，只留主张和一句话定位 */
+  .auth-pillars,
+  .auth-ladder {
     display: none;
+  }
+
+  .auth-intro {
+    margin-bottom: 0;
   }
 
   .auth-panel {

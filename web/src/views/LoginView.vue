@@ -10,10 +10,6 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
-const ICON_USER = 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'
-const ICON_LOCK = 'M5 11h14v9H5zM7 11V7a5 5 0 0 1 10 0v4'
-const ICON_LOGIN = 'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3'
-
 const form = reactive({ username: '', password: '' })
 const error = ref('')
 
@@ -44,17 +40,12 @@ async function onSubmit() {
 </script>
 
 <template>
-  <AuthShell
-    title="欢迎回来"
-    subtitle="登录后即可开始 AI 咨询与求职规划。"
-    :badge-icon="ICON_LOGIN"
-  >
+  <AuthShell title="登录账号" subtitle="你的画像、成长记录和任务清单都还在。">
     <form @submit.prevent="onSubmit">
       <AuthField
         id="login-username"
         v-model="form.username"
         label="用户名"
-        :icon="ICON_USER"
         type="text"
         autocomplete="username"
         placeholder="中英文、数字或下划线"
@@ -63,7 +54,6 @@ async function onSubmit() {
         id="login-password"
         v-model="form.password"
         label="密码"
-        :icon="ICON_LOCK"
         type="password"
         autocomplete="current-password"
         placeholder="登录密码"
@@ -72,7 +62,6 @@ async function onSubmit() {
       <div class="auth-demo">
         <div class="auth-demo-text">
           <strong>体验账号</strong>
-          <span>一个可直接登录的体验账号</span>
           <code>{{ DEMO_ACCOUNT.username }} / {{ DEMO_ACCOUNT.password }}</code>
         </div>
         <button class="btn btn-sm" type="button" :disabled="auth.loading" @click="fillDemo">

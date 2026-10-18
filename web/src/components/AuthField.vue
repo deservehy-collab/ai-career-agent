@@ -2,13 +2,12 @@
 import { computed, ref } from 'vue'
 
 /**
- * 认证页输入框：标签 + 内嵌图标 + 可显隐的密码 + hint 文案。
+ * 认证页输入框：标签在上、无内嵌图标，密码字段带显隐开关。
  * 登录/注册一共五处输入都用它，改样式只改这里。
  */
 const props = defineProps({
   id: { type: String, required: true },
   label: { type: String, required: true },
-  icon: { type: String, required: true }, // 24×24 单条 stroke 路径，沿用概览卡片那套图标语言
   modelValue: { type: String, default: '' },
   type: { type: String, default: 'text' }, // text | password
   placeholder: { type: String, default: '' },
@@ -27,18 +26,6 @@ const inputType = computed(() => (props.type === 'password' && !revealed.value ?
   <div class="field auth-field">
     <label :for="id">{{ label }}</label>
     <div class="auth-input-wrap">
-      <svg
-        class="auth-input-icon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path :d="icon" />
-      </svg>
       <input
         :id="id"
         class="auth-input"

@@ -9,10 +9,6 @@ import { useAuthStore } from '../stores/auth'
 const auth = useAuthStore()
 const router = useRouter()
 
-const ICON_USER = 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'
-const ICON_LOCK = 'M5 11h14v9H5zM7 11V7a5 5 0 0 1 10 0v4'
-const ICON_SIGNUP = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6'
-
 const form = reactive({ username: '', password: '', confirm: '' })
 const error = ref('')
 
@@ -38,17 +34,12 @@ async function onSubmit() {
 </script>
 
 <template>
-  <AuthShell
-    title="创建账号"
-    subtitle="注册成功后自动登录，马上就能开始规划。"
-    :badge-icon="ICON_SIGNUP"
-  >
+  <AuthShell title="创建账号" subtitle="注册成功后自动登录，马上就能开始规划。">
     <form @submit.prevent="onSubmit">
       <AuthField
         id="reg-username"
         v-model="form.username"
         label="用户名"
-        :icon="ICON_USER"
         type="text"
         autocomplete="username"
         placeholder="2~32 个字符"
@@ -58,7 +49,6 @@ async function onSubmit() {
         id="reg-password"
         v-model="form.password"
         label="密码"
-        :icon="ICON_LOCK"
         type="password"
         autocomplete="new-password"
         placeholder="至少 6 位"
@@ -67,7 +57,6 @@ async function onSubmit() {
         id="reg-confirm"
         v-model="form.confirm"
         label="确认密码"
-        :icon="ICON_LOCK"
         type="password"
         autocomplete="new-password"
         placeholder="再输一遍"
