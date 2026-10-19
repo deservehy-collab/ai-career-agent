@@ -11,25 +11,38 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from fastapi import Depends
+
 from backend import config
+from backend.auth import get_current_user
 from backend.jobs import TaskManager
 from backend.services import Stores
 
 __all__ = ["create_stores", "create_task_manager"]
 
 
-def create_stores() -> Stores:
-    """构造本次请求要用的两个 store。
+def create_stores(current: dict = Depends(get_current_user)) -> Stores:
+    """构造**当前登录用户**的两个 store。
 
-    两个 store 都**无内存状态**（每次调用重新读盘），因此每个请求新建一份是安全的，
-    不需要也不应该做成全局单例 —— 那样反而容易让人误以为它们缓存了数据。
+    多用户隔离
+    ----------
+    每个账号一份独立目录（``runs/users/user_{id}/``），loop.json 与
+    growth.json 互不可见 —— 用户 A 的任务清单 / 成长历史不会出现在
+    用户 B 的任何接口里。目录从 ``config.user_data_dir`` 动态派生
+    （锚定认证库所在目录），测试照旧可以整体替换本函数，或只替换
+    ``get_current_user`` 切换"当前用户"。
+
+    两个 store 都**无内存状态**（每次调用重新读盘），因此每个请求新建一份
+    是安全的，不需要也不应该做成全局单例。
     """
     from agents.growth_store import GrowthStore
     from agents.loop_store import LoopStore
 
+    user_id = int(current["id"])
+    directory = config.user_data_dir(user_id)
     return Stores(
-        growth=GrowthStore(directory=config.RUNS_DIR),
-        loop=LoopStore(directory=config.RUNS_DIR),
+        growth=GrowthStore(directory=directory, user_id=f"user_{user_id}"),
+        loop=LoopStore(directory=directory, user_id=f"user_{user_id}"),
     )
 
 

@@ -44,6 +44,17 @@ EvidenceText = Annotated[
     ),
 ]
 
+# 手动补录成果（/api/growth/manual-event）的字段上限。动机与证据文本同款：
+# loop.json 是全量读-改-写的，任何无界写入都会拖慢所有人的后续查询。
+ManualEventTitle = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=config.MANUAL_TITLE_MAX_CHARS),
+]
+ManualSkill = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=config.MANUAL_SKILL_MAX_CHARS),
+]
+
 
 class AnalyzeRequest(BaseModel):
     """``POST /api/analyze`` 的请求体。
@@ -54,9 +65,12 @@ class AnalyzeRequest(BaseModel):
     """
 
     user_profile: UserProfileRequest
-    target_job: str = Field(min_length=1, description="目标岗位，不能为空")
+    target_job: str = Field(
+        min_length=1, max_length=config.TARGET_JOB_MAX_CHARS, description="目标岗位，不能为空"
+    )
     growth_events: list[dict[str, Any]] = Field(
         default_factory=list,
+        max_length=config.GROWTH_EVENTS_MAX_ITEMS,
         description="本轮新完成的学习/项目成果；直接透传给 growth_node，由业务层校验",
     )
     target_company: str | None = Field(default=None, description="限定公司（可选）")
@@ -100,7 +114,7 @@ class NextRoundRequest(BaseModel):
     """
 
     user_profile: UserProfileRequest | None = None
-    target_job: str | None = None
+    target_job: str | None = Field(default=None, max_length=config.TARGET_JOB_MAX_CHARS)
 
 
 class ManualGrowthEventRequest(BaseModel):
@@ -108,10 +122,17 @@ class ManualGrowthEventRequest(BaseModel):
 
     用于打破"空系统死锁"：全新用户还没有任何任务时，也可以直接提交一条
     自己学过/做过的成果，让「生成下一轮」有内容可处理。
+
+    字段上限与任务证据同一套口径（evidence 直接复用 :data:`EvidenceText`，
+    也是 5000 字）—— loop.json 是全量读-改-写的，无界写入会拖慢所有后续查询。
     """
 
     kind: str = Field(description="成果类型，learning|project")
-    title: str = Field(min_length=1, description="成果标题")
-    skills: list[str] = Field(default_factory=list, description="成果关联技能")
-    evidence: str = Field(min_length=1, description="成果证据（具体学了/做了什么）")
-    target_job: str | None = Field(default=None, description="目标岗位（可选，首次建任务时用）")
+    title: ManualEventTitle = Field(description="成果标题")
+    skills: list[ManualSkill] = Field(
+        default_factory=list,
+        max_length=config.MANUAL_SKILLS_MAX_ITEMS,
+        description="成果关联技能",
+    )
+    evidence: EvidenceText = Field(description="成果证据（具体学了/做了什么）")
+    target_job: str | None = Field(default=None, max_length=config.TARGET_JOB_MAX_CHARS, description="目标岗位（可选，首次建任务时用）")

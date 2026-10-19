@@ -56,6 +56,9 @@ class TaskRecord:
     run_id: str
     kind: str
     status: str = STATUS_QUEUED
+    #: 提交者的用户 id。``None`` 表示内部/测试直接提交的记录，不做归属过滤；
+    #: HTTP 层提交的一定带值 —— 别的用户拿着这个 run_id 查询会得到 404。
+    owner: int | None = None
     result: Any = None
     error: str | None = None
     created_at: str = field(default_factory=_now)
@@ -91,16 +94,20 @@ class TaskManager:
         self._max_pending = max_pending
 
     # ── 提交 ────────────────────────────────────────────────────────────
-    def submit(self, fn: Callable[..., Any], *args: Any, kind: str = "job", **kwargs: Any) -> str:
+    def submit(
+        self, fn: Callable[..., Any], *args: Any, kind: str = "job",
+        owner: int | None = None, **kwargs: Any,
+    ) -> str:
         """把 ``fn(*args, **kwargs)`` 排进队列，立刻返回 ``run_id``。
 
+        ``owner``：提交者的用户 id（HTTP 层必传）；查询接口按它做归属过滤。
         队列已满时抛 :class:`QueueFull`，**不会**创建记录、也不会占用线程池。
         """
         run_id = uuid.uuid4().hex
         with self._lock:
             self._reject_when_queue_full_locked()
             self._drop_oldest_finished_locked()
-            self._records[run_id] = TaskRecord(run_id=run_id, kind=kind)
+            self._records[run_id] = TaskRecord(run_id=run_id, kind=kind, owner=owner)
         self._executor.submit(self._execute, run_id, fn, args, kwargs)
         return run_id
 
@@ -164,11 +171,18 @@ class TaskManager:
         with self._lock:
             return self._records.get(run_id)
 
-    def snapshot(self, run_id: str) -> dict | None:
-        """取一份脱离锁的记录快照，供 HTTP 序列化。"""
+    def snapshot(self, run_id: str, owner: int | None = None) -> dict | None:
+        """取一份脱离锁的记录快照，供 HTTP 序列化。
+
+        ``owner`` 传用户 id 时做归属过滤：**别人的 run_id 视同不存在**（返回
+        ``None`` → 404），不泄露"存在与否"。``owner=None``（内部/测试直连）
+        不过滤。``owner`` 为 ``None`` 的记录（内部提交）对任何人都可见。
+        """
         with self._lock:
             record = self._records.get(run_id)
             if record is None:
+                return None
+            if owner is not None and record.owner is not None and record.owner != owner:
                 return None
             return asdict(record)
 

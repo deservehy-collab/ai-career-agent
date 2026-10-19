@@ -5,11 +5,12 @@
 
 模块分工
 --------
-- ``config``   —— 集中配置（Ollama、模型、CORS、端口、项目路径）
-- ``schemas``  —— 请求 / 响应的 Pydantic 模型
-- ``jobs``     —— 后台任务管理器（长耗时模型调用移出请求线程）
-- ``analyze``  —— 只读分析链路（含成长存储隔离）
-- ``services`` —— 业务编排层（任务完成 / 待办成果 / 下一轮规划 / 只读查询）
-- ``deps``     —— FastAPI 依赖注入点（测试可覆盖）
-- ``app``      —— FastAPI 应用与路由
+- ``config``    —— 集中配置（Ollama、模型、CORS、端口、项目路径、per-user 数据目录）
+- ``schemas``   —— 请求 / 响应的 Pydantic 模型
+- ``jobs``      —— 后台任务管理器（长耗时模型调用移出请求线程，记录按用户归属）
+- ``analyze``   —— 只读分析链路（含成长存储隔离，基线跟随当前用户）
+- ``migration`` —— 单用户旧数据（runs 根目录的 loop/growth.json）一次性迁移
+- ``services``  —— 业务编排层（任务完成 / 待办成果 / 下一轮规划 / 只读查询）
+- ``deps``      —— FastAPI 依赖注入点（store 按登录用户隔离，测试可覆盖）
+- ``app``       —— FastAPI 应用与路由
 """

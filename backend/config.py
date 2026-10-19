@@ -29,6 +29,9 @@ __all__ = [
     "TASK_RECORD_CAP", "TASK_QUEUE_CAP",
     "AUTH_DB_PATH", "JWT_SECRET_PATH", "JWT_ALGORITHM", "JWT_TTL_HOURS",
     "USERNAME_MIN_LENGTH", "USERNAME_MAX_LENGTH", "PASSWORD_MIN_LENGTH",
+    "AUTH_FAILURE_LIMIT", "AUTH_FAILURE_WINDOW_SECONDS",
+    "REGISTER_LIMIT", "REGISTER_WINDOW_SECONDS",
+    "users_data_root", "user_data_dir", "legacy_store_path",
 ]
 
 # ── 路径 ────────────────────────────────────────────────────────────────
@@ -61,6 +64,16 @@ CORS_ORIGINS = [
 # 任务证据的字符上限：空白拒绝、超长拒绝，由 schemas.CompleteTaskRequest 执行。
 EVIDENCE_MAX_LENGTH = 5000
 
+# 手动补录成果（/api/growth/manual-event）的输入上限。与任务证据同一套动机：
+# loop.json 是全量读-改-写的，任何无界写入都会让所有后续查询变慢。
+MANUAL_TITLE_MAX_CHARS = 200
+MANUAL_SKILLS_MAX_ITEMS = 50
+MANUAL_SKILL_MAX_CHARS = 100
+# 分析请求里 growth_events 的条数上限（内容仍由业务层校验，这里只限数量）。
+GROWTH_EVENTS_MAX_ITEMS = 200
+# 目标岗位的字符上限。
+TARGET_JOB_MAX_CHARS = 200
+
 # 后台任务的并发上限。**必须是 1**：runs/growth.json 与 runs/loop.json 的
 # 读-改-写只在进程内串行安全（见 tests/test_readonly_boundary.py），
 # 且分析链路的成长存储隔离会临时改写进程级全局 store。
@@ -88,3 +101,35 @@ JWT_TTL_HOURS = 24
 USERNAME_MIN_LENGTH = 2
 USERNAME_MAX_LENGTH = 32
 PASSWORD_MIN_LENGTH = 6
+
+# 认证限速（进程内滑动窗口，见 backend/auth.py）。
+# 登录：同一 IP+用户名 在窗口内**失败**超过次数 → 429；成功登录清零计数。
+AUTH_FAILURE_LIMIT = 10
+AUTH_FAILURE_WINDOW_SECONDS = 900.0
+# 注册：同一 IP 在窗口内最多注册这么多账号（防批量灌库；阈值放得宽，
+# 正常使用与测试套件都不会碰到）。
+REGISTER_LIMIT = 60
+REGISTER_WINDOW_SECONDS = 3600.0
+
+# ── 按用户隔离的业务数据目录 ──────────────────────────────────────────────
+# 单用户时代（v1.x）业务数据直接躺在 runs/ 根下；多账号之后每个用户一份：
+#   runs/users/user_{id}/loop.json
+#   runs/users/user_{id}/growth.json
+# 根目录**锚定在认证库所在目录**（默认 runs/）：测试把 AUTH_DB_PATH 指到
+# 临时目录时，per-user 目录与旧数据迁移会自动跟着隔离，不会碰项目 runs/。
+# 旧数据的归属迁移见 backend/migration.py。
+
+
+def users_data_root() -> Path:
+    """per-user 业务数据的根目录（动态读取，测试可整体隔离）。"""
+    return Path(AUTH_DB_PATH).parent / "users"
+
+
+def user_data_dir(user_id: int) -> Path:
+    """某个用户专属的 store 目录。"""
+    return users_data_root() / f"user_{int(user_id)}"
+
+
+def legacy_store_path(filename: str) -> Path:
+    """单用户时代留在数据根目录下的旧 store 路径（loop.json / growth.json）。"""
+    return Path(AUTH_DB_PATH).parent / filename

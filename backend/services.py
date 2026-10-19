@@ -260,13 +260,17 @@ def run_analyze_and_save(stores: Stores, payload) -> dict:
 
     返回 ``{ok, round_created, round_no, target_job, learning_plan, project_plan,
     analysis (只读分析结果), warning}``。
+
+    分析基线是**当前用户**的 ``stores.growth``（见 ``backend.analyze.run_workflow``
+    的 ``baseline_store``）—— 隔离复制看到的历史与这位用户真实一致，而不是
+    数据根目录下的旧全局文件。
     """
     from backend.analyze import run_workflow
 
     loop = stores.loop
     if loop.latest_round() is not None:
         # 已有轮次：保持只读分析语义，不重复建轮次
-        analysis = run_workflow(payload)
+        analysis = run_workflow(payload, baseline_store=stores.growth)
         return {
             "ok": True,
             "round_created": False,
@@ -278,7 +282,7 @@ def run_analyze_and_save(stores: Stores, payload) -> dict:
             "warning": "已存在轮次，本次分析未重复创建任务（任务已在「学习与项目」页）。",
         }
 
-    analysis = run_workflow(payload)
+    analysis = run_workflow(payload, baseline_store=stores.growth)
     learning_plan = list(analysis.get("learning_plan") or [])
     project_plan = list(analysis.get("project_plan") or [])
 
@@ -438,17 +442,30 @@ def run_next_round(stores: Stores, user_profile=None, target_job=None) -> dict:
 
 
 # ── 只读查询 ────────────────────────────────────────────────────────────
-def list_tasks(stores: Stores, round_no: int | None = None, status: str | None = None) -> dict:
+def list_tasks(
+    stores: Stores,
+    round_no: int | None = None,
+    status: str | None = None,
+    limit: int = 500,
+    offset: int = 0,
+) -> dict:
     """查询轮次与任务清单。**只读。**
 
     ``status`` 非法时抛 ``ValueError``（由 app 层转成 422），
     不静默返回空列表 —— 那会让"参数写错"看起来像"没有任务"。
+
+    ``limit`` / ``offset`` 只对返回的 ``tasks`` 数组开窗；``rounds`` 与
+    ``summary`` 永远是**全量口径**，另附 ``pagination`` 块说明窗口位置。
+    默认 ``limit=500`` —— 正常使用远用不满，不传参数的老前端行为不变。
     """
     loaded = stores.loop.load()
     try:
         tasks = stores.loop.tasks(round_no=round_no, status=status, data=loaded.data)
     except LoopStoreError as exc:
         raise ValueError(str(exc)) from exc
+
+    total = len(tasks)
+    window = tasks[offset:offset + limit] if (offset or limit) else tasks
 
     rounds = []
     for entry in stores.loop.rounds(loaded.data):
@@ -468,9 +485,10 @@ def list_tasks(stores: Stores, round_no: int | None = None, status: str | None =
         "warning": loaded.warning,
         "rounds": rounds,
         "latest_round": latest,
-        "tasks": tasks,
+        "tasks": window,
+        "pagination": {"limit": limit, "offset": offset, "returned": len(window), "total": total},
         "summary": {
-            "total": len(tasks),
+            "total": total,
             "completed": sum(1 for t in tasks if t.get("status") == TASK_COMPLETED),
             "pending": sum(1 for t in tasks if t.get("status") == TASK_PENDING),
         },

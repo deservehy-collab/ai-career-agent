@@ -116,12 +116,26 @@ def jsonable(payload):
     return json.loads(json.dumps(payload, ensure_ascii=False, default=str))
 
 
-def run_workflow(payload) -> dict:
+def run_workflow(payload, baseline_store: GrowthStore | None = None) -> dict:
     """跑一次只读分析，返回投影后的结果。
 
     ``payload`` 是 :class:`backend.schemas.AnalyzeRequest`。
     副作用：调用本地 Ollama 做多次推理；**不写任何真实业务数据**。
+
+    ``baseline_store``
+    ------------------
+    分析要"看着真实历史"做只读复制（见 :func:`_isolated_growth_store`）。
+    单用户时代那份历史就是全局默认 store；**按用户隔离数据后**，"真实历史"
+    是**当前用户**的 ``growth.json`` —— 由 HTTP 层把 ``stores.growth`` 传进来。
+    不传时退回全局默认 store（CLI 与既有测试的口径，行为不变）。
     """
-    with _isolated_growth_store():
-        state = workflow.invoke(payload.to_state())
+    if baseline_store is None:
+        with _isolated_growth_store():
+            state = workflow.invoke(payload.to_state())
+    else:
+        # 先把全局 store 指到当前用户，再进隔离：隔离复制的基线才是这位用户的，
+        # 而不是数据根目录下的旧全局文件。两层上下文退出时各自还原。
+        with use_growth_store(baseline_store):
+            with _isolated_growth_store():
+                state = workflow.invoke(payload.to_state())
     return project_result(state)
