@@ -18,8 +18,8 @@ from graph.state import CareerState, check_update
 # Assessment Agent 给出的"已满足"状态：这类技能不是待补缺口
 SATISFIED_STATUS = "已满足"
 
-PROMPT = """你是一名技术项目实训导师。请为一名想成为「{target_job}」的大学生
-设计实战项目。
+PROMPT = """你是一名项目实训导师，熟悉「{target_job}」所在行业的真实项目形态。
+请为一名想成为该岗位的大学生设计实战项目。
 
 【他的能力差距（已按优先级排序）】
 {gaps}
@@ -36,6 +36,8 @@ PROMPT = """你是一名技术项目实训导师。请为一名想成为「{targ
 例如：缺 FastAPI + Docker + Agent 编排，就可以设计一个
 "AI 智能求职助手"，要求用 FastAPI 提供接口、用 Agent 编排流程、用 Docker 部署，
 一个项目同时补三个缺口。
+（这是技术岗的示例；其他领域按该行业的真实项目形态类比，
+如临床护理个案、财务模拟核算、教学设计作品集、市场调研报告等。）
 
 【要求】
 1. 设计 2~3 个项目，难度递进，第 1 个最简单。
@@ -61,9 +63,10 @@ PROMPT = """你是一名技术项目实训导师。请为一名想成为「{targ
    只写技术名称（Python、FastAPI、Docker），不要把能力描述当技术写进来
    （例如"类""类型注解""调试定位问题"都不是技术栈）。
 9. deliverable 写最终交付物，要具体可验收，
-   例如"一个能跑的 HTTP 服务 + GitHub 仓库 + README 部署说明 + Dockerfile"。
+   例如"一个能跑的 HTTP 服务 + GitHub 仓库 + README 部署说明 + Dockerfile"，
+   非技术领域按行业真实的交付形态（如一份完整的个案报告、一套核算底稿）。
 10. 项目要做学生真正能做完的规模，不要设计成企业级系统。
-11. 全部用中文，技术名称保留英文原文。"""
+11. 全部用中文，专业术语保留原文（英文术语不翻译）。"""
 
 
 class ProjectItem(BaseModel):

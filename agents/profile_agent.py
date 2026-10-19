@@ -8,8 +8,8 @@ from agents.llm import structured_invoke
 from agents.utils import check_non_empty, dedupe_by, log, normalize_level
 from graph.state import CareerState, check_update
 
-PROMPT = """你是一名资深技术职业规划师。请分析下面这名大学生的个人信息，
-提取他已掌握的技能、技能水平，以及技术优势和技术短板。
+PROMPT = """你是一名资深职业规划师。请分析下面这名大学生的个人信息，
+提取他已掌握的技能、技能水平，以及优势和短板。
 
 【学生信息】
 专业：{major}
@@ -18,26 +18,29 @@ PROMPT = """你是一名资深技术职业规划师。请分析下面这名大�
 项目经历：{projects}
 
 【评级标准】必须严格按证据分级，不要因为技能出现在自述里就给高分：
-- 入门：只是听说过或跟着教程跑过示例，说不清原理
+- 入门：只是听说过或跟着教程/演示练过，说不清原理
 - 初级：能在指导下完成简单任务，不熟常见坑
-- 中级：能独立完成常规开发任务，遇到问题能自己查资料解决
-- 高级：能主导设计、做过优化或踩坑总结，能讲清底层原理
+- 中级：能独立完成常规任务，遇到问题能自己查资料解决
+- 高级：能独立主导、做过优化或踩坑总结，能讲清背后的原理与规范
 
 【要求】
 1. 只能依据上面给出的信息判断，不要虚构学生没有的经历和技能。
-2. level 只能从这四档里选：入门、初级、中级、高级。
-3. 如果某项技能只出现在"自述技能"里、没有任何项目经历佐证，最高只能给"中级"。
-4. evidence 要写明判断依据，例如"在 RAG 知识库问答系统中实际使用过"；
+2. 技能按**该专业与其目标方向的真实技能**理解，不限于信息技术领域：
+   护理专业的"静脉输液操作"、会计专业的"财务报表编制"与"Python"同等对待。
+3. level 只能从这四档里选：入门、初级、中级、高级。
+4. 如果某项技能只出现在"自述技能"里、没有任何项目经历佐证，最高只能给"中级"。
+5. evidence 要写明判断依据，例如"在××项目中实际使用过"；
    依据相同也不要机械复制同一句话，要结合该技能本身说明。
-5. strengths 给 2~4 条技术优势，weaknesses 给 2~4 条技术短板，每条一句话。
-   短板要具体到技术能力（如"缺少后端服务开发经验"），不要写"需加强项目管理"这类空话。
-6. 全部用中文。"""
+6. strengths 给 2~4 条优势，weaknesses 给 2~4 条短板，每条一句话。
+   短板要具体到能力（如"缺少独立负责一个完整项目的经验"），
+   不要写"需加强时间管理"这类空话。
+7. 全部用中文。"""
 
 
 class Skill(BaseModel):
     """单个技能的画像。"""
 
-    skill: str = Field(description="技能名称，如 Python、LangGraph")
+    skill: str = Field(description="技能名称，可以是任何专业领域的技能")
     level: Literal["入门", "初级", "中级", "高级"] = Field(description="掌握水平")
     evidence: str = Field(description="判断依据，来自自述或项目经历")
 
@@ -52,8 +55,8 @@ class ProfileAnalysis(BaseModel):
     """Profile Agent 的结构化输出。"""
 
     skills: list[Skill] = Field(description="学生已掌握的技能列表")
-    strengths: list[str] = Field(description="技术优势")
-    weaknesses: list[str] = Field(description="技术短板")
+    strengths: list[str] = Field(description="优势")
+    weaknesses: list[str] = Field(description="短板")
 
 
 def profile_node(state: CareerState) -> dict:

@@ -17,7 +17,8 @@ from agents.llm import structured_invoke
 from agents.utils import log, normalize_level
 from graph.state import CareerState, check_update
 
-PROMPT = """你是一名技术能力评估专家。请判断学生的已有技能能否支撑目标岗位的要求。
+PROMPT = """你是一名能力评估专家。请判断学生的已有技能能否支撑目标岗位的要求。
+技能与岗位要求可能属于任何专业领域（不限于信息技术），按语义对应判断即可。
 
 【学生已掌握技能】
 {user_skills}

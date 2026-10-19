@@ -2,12 +2,16 @@
 import { computed, ref, watch } from 'vue'
 
 import { useProfileStore } from '../stores/profile'
+import { ALL_MAJORS, GRADE_OPTIONS, MAJOR_GROUPS } from '../utils/enums'
 import { formatDateTime } from '../utils/format'
 import { formatList, parseList } from '../utils/storage'
 
 /**
  * 画像表单：直接编辑 profile store；store 内部已把改动写进 localStorage，
  * 所以这里不需要额外的"保存"按钮 —— 刷新页面内容还在。
+ *
+ * 专业 / 年级用下拉：常用值点选即可；专业不在名单里时切「其他（手动输入）」
+ * 自由填写 —— 下拉只是输入辅助，不是白名单，任何专业都要能填。
  *
  * 技能 / 项目用多行文本编辑（用户写起来最自然），
  * 与 store 里的字符串数组之间来回转换：文本是输入时的真相，
@@ -17,6 +21,20 @@ const profile = useProfileStore()
 
 const skillsText = ref(formatList(profile.skills))
 const projectsText = ref(formatList(profile.projects))
+
+/** 「其他（手动输入）」选项的哨兵值；不会与真实专业名撞车。 */
+const CUSTOM_MAJOR = '__custom__'
+
+const majorSelection = computed({
+  get() {
+    if (!profile.major) return ''
+    return ALL_MAJORS.includes(profile.major) ? profile.major : CUSTOM_MAJOR
+  },
+  set(value) {
+    // 切到手动输入时清空，让用户从头填；选名单里的值则直接落 store
+    profile.major = value === CUSTOM_MAJOR ? '' : value
+  },
+})
 
 function sameList(a, b) {
   const left = a || []
@@ -76,25 +94,44 @@ function handleClear() {
     <div class="grid grid-2">
       <div>
         <div class="field">
-          <label for="pf-major">专业</label>
-          <input id="pf-major" v-model="profile.major" type="text" placeholder="如：计算机科学与技术" />
+          <label for="pf-major">
+            专业
+            <span class="hint">常见专业直接选，没有就选「其他」手动输入</span>
+          </label>
+          <select id="pf-major" v-model="majorSelection">
+            <option value="">未填写</option>
+            <optgroup v-for="group in MAJOR_GROUPS" :key="group.label" :label="group.label">
+              <option v-for="item in group.options" :key="item" :value="item">{{ item }}</option>
+            </optgroup>
+            <option :value="CUSTOM_MAJOR">其他（手动输入）</option>
+          </select>
+          <input
+            v-if="majorSelection === CUSTOM_MAJOR"
+            v-model="profile.major"
+            type="text"
+            placeholder="请输入专业名称，如：护理学"
+            style="margin-top: 8px"
+          />
         </div>
 
         <div class="field">
           <label for="pf-grade">年级</label>
-          <input id="pf-grade" v-model="profile.grade" type="text" placeholder="如：大三" />
+          <select id="pf-grade" v-model="profile.grade">
+            <option value="">未填写</option>
+            <option v-for="item in GRADE_OPTIONS" :key="item" :value="item">{{ item }}</option>
+          </select>
         </div>
 
         <div class="field">
           <label for="pf-job">
             目标岗位
-            <span class="hint">必填，后端要求非空</span>
+            <span class="hint">必填，任何行业的岗位都可以</span>
           </label>
           <input
             id="pf-job"
             v-model="profile.targetJob"
             type="text"
-            placeholder="如：AI应用开发工程师"
+            placeholder="如：AI 应用开发工程师 / 注册会计师 / 临床护士"
           />
         </div>
       </div>
@@ -109,7 +146,7 @@ function handleClear() {
             id="pf-skills"
             :value="skillsText"
             rows="5"
-            placeholder="Python&#10;LangChain&#10;Docker"
+            placeholder="Python&#10;Java&#10;财务报表分析&#10;静脉输液操作"
             @input="onSkillsInput"
           />
         </div>
@@ -123,7 +160,7 @@ function handleClear() {
             id="pf-projects"
             :value="projectsText"
             rows="3"
-            placeholder="RAG 知识库问答系统"
+            placeholder="RAG 知识库问答系统&#10;社区医院实习"
             @input="onProjectsInput"
           />
         </div>
