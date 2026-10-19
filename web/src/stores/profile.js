@@ -1,50 +1,42 @@
 /**
- * 用户画像（localStorage）。
+ * 用户画像（会话内状态 + 分析产物持久化）。
  *
- * 后端**没有画像接口** —— 画像由前端保存、每次分析随请求提交。
- * 这里维护两个语义不同的东西，**分开存**（不要合并成一个键）：
+ * 两个语义不同的东西，**分开对待**：
  *
  *   1. 自述信息 `{major, grade, skills: string[], projects: string[]}`
  *      → 就是后端 `UserProfileRequest` 的四个字段，用户自己填的。
+ *      **只在内存里活一个会话**：每次刷新页面都清空（用户明确要求）——
+ *      上一次分析填的专业/岗位不该悄悄溜进下一次分析。后端没有画像接口。
  *   2. 最近一次分析返回的**结构化能力表** `[{skill, level, evidence}]`
- *      → 用户填不出来，只能由分析产生。提交任务完成时当 `profile_skills` 回传，
- *        让"升级预览"和下一轮 growth_node 用同一基线（见 backend/schemas.py 的说明）。
+ *      → 用户填不出来，只能由分析产生，且是几分钟推理换来的，
+ *        **持久化到 localStorage**（LAST_SKILLS_KEY），提交任务完成时当
+ *        `profile_skills` 回传，让"升级预览"和下一轮 growth_node 用同一基线
+ *        （见 backend/schemas.py 的说明）。删除需用户明确操作。
  */
 
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
-import { LAST_SKILLS_KEY, PROFILE_KEY, readJson, removeKey, writeJson } from '../utils/storage'
-
-function loadInitialProfile() {
-  const saved = readJson(PROFILE_KEY, null)
-  return {
-    major: typeof saved?.major === 'string' ? saved.major : '',
-    grade: typeof saved?.grade === 'string' ? saved.grade : '',
-    skills: Array.isArray(saved?.skills) ? saved.skills.filter((s) => typeof s === 'string') : [],
-    projects: Array.isArray(saved?.projects) ? saved.projects.filter((s) => typeof s === 'string') : [],
-    targetJob: typeof saved?.target_job === 'string' ? saved.target_job : '',
-  }
-}
+import { LAST_SKILLS_KEY, readJson, writeJson } from '../utils/storage'
 
 function loadInitialSkills() {
   const saved = readJson(LAST_SKILLS_KEY, null)
   if (!saved || typeof saved !== 'object') return { skills: [], at: null }
   return {
-    skills: Array.isArray(saved.skills) ? saved.skills : [],
+    skills: Array.isArray(saved?.skills) ? saved.skills : [],
     at: typeof saved.at === 'string' ? saved.at : null,
   }
 }
 
 export const useProfileStore = defineStore('profile', () => {
-  const initial = loadInitialProfile()
-  const initialSkills = loadInitialSkills()
+  // 自述画像一律从空白开始（刷新即清空，不读任何持久化数据）
+  const major = ref('')
+  const grade = ref('')
+  const skills = ref([])
+  const projects = ref([])
+  const targetJob = ref('')
 
-  const major = ref(initial.major)
-  const grade = ref(initial.grade)
-  const skills = ref(initial.skills)
-  const projects = ref(initial.projects)
-  const targetJob = ref(initial.targetJob)
+  const initialSkills = loadInitialSkills()
 
   /** 最近一次分析得到的结构化能力表（与上面的自述技能是两回事）。 */
   const lastSkills = ref(initialSkills.skills)
@@ -68,25 +60,12 @@ export const useProfileStore = defineStore('profile', () => {
     return warnings
   })
 
-  function persistProfile() {
-    storageFailed.value = !writeJson(PROFILE_KEY, {
-      major: major.value,
-      grade: grade.value,
-      skills: skills.value,
-      projects: projects.value,
-      target_job: targetJob.value,
-    })
-  }
-
   function persistSkills() {
     storageFailed.value = !writeJson(LAST_SKILLS_KEY, {
       skills: lastSkills.value,
       at: lastSkillsAt.value,
     })
   }
-
-  // 任一字段变化即落盘，刷新页面不丢。
-  watch([major, grade, skills, projects, targetJob], persistProfile, { deep: true })
 
   /** 分析成功后由 analysis store 调用。 */
   function setLastSkills(list, at = new Date().toISOString()) {
@@ -112,14 +91,16 @@ export const useProfileStore = defineStore('profile', () => {
     skills.value = []
     projects.value = []
     targetJob.value = ''
-    removeKey(PROFILE_KEY)
   }
 
   function clearLastSkills() {
     lastSkills.value = []
     lastSkillsAt.value = null
-    removeKey(LAST_SKILLS_KEY)
+    persistSkills()
   }
+
+  // 分析产物落盘，刷新页面不丢；自述画像**有意不持久化**（见文件头说明）。
+  watch(lastSkills, persistSkills, { deep: true })
 
   return {
     major,
