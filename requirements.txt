@@ -1,12 +1,23 @@
-# 直接依赖（LLM 推理全部走本地 Ollama，不使用云端 API）
-langchain-ollama>=1.1.0
-langgraph>=1.2.14
-pydantic>=2.13.5
+# Direct dependencies. LLM inference runs entirely on local Ollama; no cloud APIs.
+# Versions below are the combination verified by this project.
+# Transitive dependencies are resolved by pip.
 
-# Web API 层（前后端重建，见 backend/；版本与本机 .venv 已装版本对齐，精确锁定）
+# Agents and pipeline
+langchain-ollama==1.1.0
+langgraph==1.2.14
+pydantic==2.13.5
+
+# Web API
 fastapi==0.143.0
 uvicorn==0.54.0
 
-# 用户认证（登录/注册）：SQLite ORM + JWT
-sqlalchemy>=2.1
-PyJWT>=2.15
+# Authentication: SQLite ORM + JWT
+SQLAlchemy==2.1.5
+PyJWT==2.15.1
+
+# YAML files under knowledge/
+PyYAML==6.0.3
+
+# Tests (README step 8; httpx is required by FastAPI TestClient)
+pytest==9.1.1
+httpx==0.28.1
