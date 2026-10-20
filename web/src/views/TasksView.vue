@@ -1,16 +1,12 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 
-import AgentTag from '../components/AgentTag.vue'
-import AppBadge from '../components/AppBadge.vue'
 import CompletionResult from '../components/CompletionResult.vue'
-import LearningPlanList from '../components/LearningPlanList.vue'
-import ProjectPlanList from '../components/ProjectPlanList.vue'
-import TaskCard from '../components/TaskCard.vue'
 
 import { clearTasks, completeTask, getPending, listTasks } from '../api/endpoints'
 import { useProfileStore } from '../stores/profile'
-import { storeStatusTone, storeStatusText } from '../utils/enums'
+import { storeStatusText, taskKindText, taskStatusText } from '../utils/enums'
+import { joinList } from '../utils/format'
 
 /**
  * 学习与项目页。
@@ -67,12 +63,63 @@ const readOnly = computed(() => data.value != null && data.value.writable === fa
 const visibleTasks = computed(() =>
   selectedRound.value == null ? tasks.value : tasks.value.filter((t) => t.round === selectedRound.value),
 )
+const visibleDone = computed(() => visibleTasks.value.filter((t) => t.status === 'completed').length)
+const visiblePending = computed(() => visibleTasks.value.length - visibleDone.value)
+
+/** 编号跟着整份清单走，筛到某一轮时也还是原来那个号，不对不上。 */
+const taskNumbers = computed(() => {
+  const map = new Map()
+  tasks.value.forEach((task, index) => map.set(task.task_id, index + 1))
+  return map
+})
+
+function taskNo(task) {
+  return String(taskNumbers.value.get(task?.task_id) ?? '—').padStart(2, '0')
+}
+
+/** 按轮次分组：全部轮次视图里，组头负责交代每一段属于哪一轮。 */
+const groupedTasks = computed(() => {
+  const groups = []
+  const seen = new Map()
+  for (const task of visibleTasks.value) {
+    let group = seen.get(task.round)
+    if (!group) {
+      group = { round: task.round, tasks: [], done: 0 }
+      seen.set(task.round, group)
+      groups.push(group)
+    }
+    group.tasks.push(task)
+    if (task.status === 'completed') group.done += 1
+  }
+  return groups
+})
+
+const currentRound = computed(() => {
+  const roundNo = selectedRound.value ?? latestRoundNo.value
+  return rounds.value.find((round) => round.round === roundNo) || null
+})
+const targetJob = computed(() => currentRound.value?.target_job || '未记录')
+
+const listStatusText = computed(() => {
+  if (readOnly.value) return '只读 · 不能写入'
+  if (data.value?.store_status === 'ok') return '已保存 · 可写入'
+  return storeStatusText(data.value?.store_status)
+})
+
+const runningStatus = computed(() => {
+  if (readOnly.value) return '只读'
+  if (visiblePending.value) return '执行中'
+  return visibleTasks.value.length ? '已完成' : '暂无任务'
+})
 
 /** 只有选中最新一轮（或未筛选）时才有计划明细可展示。 */
 const planDetailRound = computed(() => {
   if (selectedRound.value == null) return latestRound.value
   return selectedRound.value === latestRoundNo.value ? latestRound.value : null
 })
+
+const learningPlan = computed(() => planDetailRound.value?.learning_plan || [])
+const projectPlan = computed(() => planDetailRound.value?.project_plan || [])
 
 const showPlanLimitNote = computed(
   () => selectedRound.value != null && selectedRound.value !== latestRoundNo.value,
@@ -124,7 +171,19 @@ function backupName(path) {
   return parts[parts.length - 1] || ''
 }
 
-/** 弹层打开前所在的元素：关闭后把焦点还回去，键盘用户不会掉回页首。 */
+function pad2(index) {
+  return String(index + 1).padStart(2, '0')
+}
+
+/** 行内日期只到"几月几日"；解析失败就不显示，不假装成功。 */
+function shortDate(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getMonth() + 1} 月 ${date.getDate()} 日`
+}
+
+/** 弹层/抽屉打开前所在的元素：关闭后把焦点还回去，键盘用户不会掉回页首。 */
 let lastFocused = null
 
 function openComplete(task) {
@@ -133,7 +192,6 @@ function openComplete(task) {
   evidenceText.value = ''
   evidenceError.value = ''
   submitError.value = ''
-  submitResult.value = null
   nextTick(() => document.getElementById('tv-evidence')?.focus())
 }
 
@@ -179,8 +237,16 @@ async function submit() {
     submitResult.value = await completeTask(completingTask.value.task_id, body)
     completingTask.value = null
     evidenceText.value = ''
-    restoreFocus()
+    // 提交行的按钮会随任务变成"已完成"而消失，焦点不能再还给它；
+    // 三段式结论是这次操作的新内容，直接把焦点送过去。
+    lastFocused = null
     await load()
+    nextTick(() => {
+      const result = document.getElementById('tv-result')
+      if (!result) return
+      result.scrollIntoView({ block: 'start' })
+      result.focus({ preventScroll: true })
+    })
   } catch (error) {
     submitError.value = error?.message || '提交失败'
   } finally {
@@ -246,16 +312,6 @@ async function confirmClear() {
 
 <template>
   <div>
-    <div class="page-head">
-      <h1>学习与项目</h1>
-      <p>
-        任务有两个来源：第一次「岗位分析」会把当时给出的学习/项目计划存成第 1 轮，
-        之后每一轮由「成长记录」页的「生成下一轮」创建。
-        勾完任务写上证据，由成长节点评估技能升级。
-        不想再看到这批任务，用「任务进度」卡片右侧的「清空任务清单」—— 它只清清单，不动成长历史。
-      </p>
-    </div>
-
     <!-- 加载 / 失败 -->
     <div v-if="loading && !data" class="card">
       <div class="card-body"><div class="empty">正在加载任务…</div></div>
@@ -267,7 +323,29 @@ async function confirmClear() {
       <div class="btn-row"><button class="btn" @click="load">重试</button></div>
     </div>
 
-    <template v-else-if="data">
+    <article v-else-if="data" class="reg">
+      <header>
+        <div class="reg-running">
+          <span class="reg-brand">AI CAREER AGENT</span>
+          <span>学习与项目</span>
+          <span class="reg-running__right">
+            当前 <b>{{ selectedRound == null ? '全部轮次' : `第 ${selectedRound} 轮` }}</b>
+            · {{ runningStatus }}
+          </span>
+        </div>
+
+        <div class="reg-mast">
+          <div>
+            <p class="reg-eyebrow">执行登记册 · 共 {{ rounds.length }} 轮</p>
+            <h1 class="reg-title">学习与项目</h1>
+          </div>
+          <p class="reg-deck">
+            把求职规划拆成今天就能动手的条目。做完一项，写下你实际做了什么 ——
+            系统据此判断技能升级、安排下一轮。
+          </p>
+        </div>
+      </header>
+
       <!-- 存储只读 / 异常 -->
       <div v-if="!data.writable" class="notice notice-warn">
         <strong>任务清单现在不能安全保存</strong>
@@ -299,240 +377,398 @@ async function confirmClear() {
       </div>
 
       <!-- 提交结果（三件事分开呈现） -->
-      <CompletionResult v-if="submitResult" :result="submitResult" />
-      <div v-if="submitResult" class="btn-row btn-row--block">
-        <button class="btn" @click="submitResult = null">收起提交结果</button>
-      </div>
-
-      <!-- 提交弹层 -->
-      <div v-if="completingTask" class="modal-backdrop" @click.self="closeComplete">
-        <div
-          class="modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="tv-modal-title"
-          @keydown.esc="closeComplete"
-        >
-          <div class="modal-head">
-            <h2 id="tv-modal-title">提交完成证据</h2>
-          </div>
-          <div class="modal-body">
-            <p class="muted flush-first">{{ completingTask.title }}</p>
-            <p class="faint modal-task-skills">
-              <template v-if="(completingTask.skills || []).length">
-                关联技能：{{ (completingTask.skills || []).join('、') }}
-              </template>
-              <template v-else>
-                这条任务没有关联技能 —— 提交只会留下一条完成记录，不会带来技能升级。
-              </template>
-            </p>
-
-            <div v-if="completingCriteria" class="modal-criteria">
-              <span class="modal-criteria__label">{{ completingCriteria.label }}</span>
-              <p class="modal-criteria__text">{{ completingCriteria.text }}</p>
-            </div>
-
-            <div class="field">
-              <label for="tv-evidence">
-                实践证据
-                <span class="hint">
-                  <template v-if="completingCriteria">
-                    照上面的{{ completingCriteria.label }}，写你实际做了什么、留下了什么
-                  </template>
-                  <template v-else>具体做了什么、有什么产出</template>
-                </span>
-              </label>
-              <textarea
-                id="tv-evidence"
-                v-model="evidenceText"
-                rows="5"
-                placeholder="例：把登录和打卡两个页面搭完了，用 10 条真实数据自测通过，没有报错"
-              />
-              <div class="faint field-count">
-                {{ evidenceText.trim().length }} / {{ EVIDENCE_MAX_LENGTH }}
-              </div>
-            </div>
-
-            <div v-if="evidenceError" class="notice notice-warn">{{ evidenceError }}</div>
-            <div v-if="submitError" class="notice notice-danger">{{ submitError }}</div>
-
-            <div class="notice notice-info flush-last">
-              <template v-if="(completingTask.skills || []).length">
-                提交后会同时得到三样东西：<strong>任务完成记录</strong>（真正落盘）、
-                <strong>成长成果</strong>（可能构不成）、<strong>技能升级预览</strong>（不会立刻写入成长历史）。
-              </template>
-              <template v-else>
-                这条提交只会留下一份<strong>任务完成记录</strong>（真正落盘），不会有成长成果，也不会有升级预览。
-              </template>
-            </div>
-          </div>
-          <div class="modal-foot">
-            <button class="btn" :disabled="submitting" @click="closeComplete">取消</button>
-            <button class="btn btn-primary" :disabled="submitting" @click="submit">
-              <span v-if="submitting" class="spinner" />
-              {{ submitting ? '提交中…' : '确认提交' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 清空弹层 -->
-      <div v-if="clearing" class="modal-backdrop" @click.self="closeClear">
-        <div
-          class="modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="tv-clear-title"
-          @keydown.esc="closeClear"
-        >
-          <div class="modal-head">
-            <h2 id="tv-clear-title">清空任务清单</h2>
-          </div>
-          <div class="modal-body">
-            <p class="muted flush-first">
-              会删掉 <strong>{{ rounds.length }}</strong> 轮、共
-              <strong>{{ summary.total }}</strong> 项任务（其中已完成
-              {{ summary.completed }} 项），删完这一页回到「还没有任务」的状态。
-            </p>
-
-            <dl class="kv kv--mid">
-              <dt>成长历史</dt>
-              <dd>不受影响。已经正式记下来的升级与成果一条都不会少。</dd>
-              <dt>原清单</dt>
-              <dd>清空前自动备份一份，照着备份名可以还原。</dd>
-              <dt>未记账成果</dt>
-              <dd>
-                <template v-if="pendingCount === null">
-                  暂时查不到有没有。若真有，清空会先被拦住、一个字节都不删，回来告诉你条数。
-                </template>
-                <template v-else-if="pendingCount === 0">
-                  没有。打卡攒下的成果都已经正式记账了。
-                </template>
-                <template v-else>
-                  <strong class="is-warn">{{ pendingCount }} 条</strong>还没进成长历史，
-                  清空会把这批真实进度一起带走。
-                </template>
-              </dd>
-            </dl>
-
-            <label v-if="clearNeedsAck" class="clear-ack">
-              <input v-model="dropPending" type="checkbox" />
-              <span>我确认连同这 {{ pendingCount }} 条未记账成果一起丢掉</span>
-            </label>
-
-            <div v-if="clearError" class="notice notice-danger">{{ clearError }}</div>
-
-            <div class="notice notice-info flush-last">
-              这里只清任务清单。想清空<b>画像与求职目标</b>，去「岗位分析」页用那边的清空按钮。
-            </div>
-          </div>
-          <div class="modal-foot">
-            <button class="btn" :disabled="clearBusy" @click="closeClear">取消</button>
-            <button class="btn btn-danger" :disabled="clearBusy || clearBlocked" @click="confirmClear">
-              <span v-if="clearBusy" class="spinner" />
-              {{ clearBusy ? '清空中…' : '确认清空' }}
-            </button>
-          </div>
+      <div
+        v-if="submitResult"
+        id="tv-result"
+        class="reg-result-anchor"
+        tabindex="-1"
+        aria-live="polite"
+      >
+        <CompletionResult :result="submitResult" />
+        <div class="btn-row btn-row--block reg-result-tools">
+          <button class="btn" @click="submitResult = null">收起提交结果</button>
         </div>
       </div>
 
       <!-- 空态 -->
-      <div v-if="!rounds.length" class="card">
-        <div class="card-head"><h2>还没有任何轮次</h2></div>
-        <div class="card-body">
-          <div class="empty">
-            还没有任务。做一次<router-link to="/analyze">岗位分析</router-link>，它给出的学习阶段与实战项目
-            会自动存成第 1 轮；之后的每一轮，在<router-link to="/growth">成长记录</router-link>页点「生成下一轮」创建。
-          </div>
-        </div>
-      </div>
+      <section v-if="!rounds.length" class="reg-empty">
+        <h2 class="reg-empty-title">还没有任何轮次</h2>
+        <p>
+          还没有任务。做一次<router-link to="/analyze">岗位分析</router-link>，它给出的学习阶段与实战项目
+          会自动存成第 1 轮；之后的每一轮，在<router-link to="/growth">成长记录</router-link>页点「生成下一轮」创建。
+        </p>
+      </section>
 
       <template v-else>
-        <!-- 轮次与进度 -->
-        <section class="card">
-          <div class="card-head">
-            <h2>
-              任务进度
-              <span class="sub">共 {{ rounds.length }} 轮，{{ summary.completed }} / {{ summary.total }} 项完成</span>
-            </h2>
-            <div class="btn-row">
-              <AppBadge
-                :text="`待完成 ${summary.pending}`"
-                :tone="summary.pending ? 'warn' : 'ok'"
-              />
-              <AppBadge :text="storeStatusText(data.store_status)" :tone="storeStatusTone(data.store_status)" />
-              <button class="btn" :disabled="loading" @click="load">
-                {{ loading ? '刷新中…' : '刷新' }}
-              </button>
-              <button class="btn btn-ghost" :disabled="readOnly || clearing" @click="openClear">
-                清空任务清单
-              </button>
+        <div class="reg-body">
+          <aside class="reg-index" aria-label="进度与轮次">
+            <div class="reg-figure-label">执行进度</div>
+            <div class="reg-figure">
+              <span>{{ visibleDone }}</span><i>/</i><span>{{ visibleTasks.length }}</span>
+              <small>项已完成</small>
             </div>
-          </div>
-          <div class="card-body">
-            <div class="round-tabs" role="group" aria-label="按轮次筛选任务">
+            <div class="reg-ruler" aria-hidden="true">
+              <span
+                v-for="task in visibleTasks"
+                :key="task.task_id"
+                :class="{ 'is-done': task.status === 'completed' }"
+              ></span>
+            </div>
+
+            <dl class="reg-facts">
+              <div><dt>待完成</dt><dd>{{ visiblePending }} 项</dd></div>
+              <div>
+                <dt>轮次</dt>
+                <dd>{{ selectedRound == null ? `${rounds.length} 轮` : `第 ${selectedRound} 轮` }}</dd>
+              </div>
+              <div><dt>目标岗位</dt><dd class="muted">{{ targetJob }}</dd></div>
+              <div><dt>清单状态</dt><dd class="muted">{{ listStatusText }}</dd></div>
+            </dl>
+
+            <nav class="reg-rounds" aria-label="按轮次筛选任务">
+              <p class="reg-rounds__label">按轮次查看</p>
               <button
-                class="btn"
-                :class="{ 'btn-primary': selectedRound === null }"
+                class="reg-round"
+                :class="{ 'is-active': selectedRound === null }"
+                :aria-pressed="selectedRound === null"
+                type="button"
                 @click="selectedRound = null"
               >
-                全部轮次
+                全部轮次 <b>{{ summary.total }}</b>
               </button>
               <button
                 v-for="round in rounds"
                 :key="round.round"
-                class="btn"
-                :class="{ 'btn-primary': selectedRound === round.round }"
+                class="reg-round"
+                :class="{ 'is-active': selectedRound === round.round }"
+                :aria-pressed="selectedRound === round.round"
+                type="button"
                 @click="selectedRound = round.round"
               >
-                第 {{ round.round }} 轮（{{ round.completed_count }}/{{ round.task_count }}）
+                第 {{ round.round }} 轮 <b>{{ round.completed_count }} / {{ round.task_count }}</b>
+              </button>
+            </nav>
+
+            <div class="reg-actions">
+              <button class="reg-quiet" type="button" :disabled="loading" @click="load">
+                {{ loading ? '刷新中…' : '刷新' }}
+              </button>
+              <button
+                class="reg-quiet reg-quiet--danger"
+                type="button"
+                :disabled="readOnly || clearing"
+                @click="openClear"
+              >
+                清空任务清单
               </button>
             </div>
-            <p class="faint round-tabs-hint">
-              目标岗位：
-              {{ (rounds.find((r) => r.round === (selectedRound ?? latestRoundNo)) || {}).target_job || '未记录' }}
-            </p>
-          </div>
-        </section>
+          </aside>
 
-        <!-- 任务清单 -->
-        <section class="card">
-          <div class="card-head">
-            <h2>
-              任务清单
-              <span class="sub">{{ visibleTasks.length }} 项</span>
-            </h2>
-          </div>
-          <div class="card-body">
+          <section class="reg-main" aria-labelledby="reg-list-title">
+            <div class="reg-sec-head">
+              <h2 id="reg-list-title">任务清单</h2>
+              <span>{{ visibleTasks.length }} 项 · 按时间顺序</span>
+            </div>
+
+            <div class="reg-table-head" aria-hidden="true">
+              <span>№</span><span>任务</span><span>技能</span><span>状态</span><span></span>
+            </div>
+
             <div v-if="!visibleTasks.length" class="empty">该轮次没有任务。</div>
-            <div v-else class="task-grid">
-              <TaskCard
-                v-for="task in visibleTasks"
-                :key="task.task_id"
-                :task="task"
-                :pending-id="submitting ? completingTask?.task_id ?? '' : ''"
-                :disabled="readOnly"
-                @complete="openComplete"
-              />
+
+            <template v-else>
+              <div v-for="group in groupedTasks" :key="group.round" class="reg-group">
+                <div class="reg-group-head">
+                  <span>第 {{ group.round }} 轮</span>
+                  <span><b>{{ group.done }} / {{ group.tasks.length }}</b> 完成</span>
+                </div>
+
+                <article
+                  v-for="task in group.tasks"
+                  :key="task.task_id"
+                  class="reg-row"
+                  :class="{ 'is-done': task.status === 'completed' }"
+                >
+                  <span class="reg-no">{{ taskNo(task) }}</span>
+
+                  <div>
+                    <div class="reg-kicker">
+                      <b>{{ taskKindText(task.kind) }}</b>
+                      <span v-if="task.status === 'completed'" class="is-done">
+                        {{ taskStatusText(task.status) }}
+                        <template v-if="task.completed_at"> · {{ shortDate(task.completed_at) }}</template>
+                      </span>
+                      <span v-else>{{ taskStatusText(task.status) }}</span>
+                    </div>
+
+                    <h3 class="reg-task-title">{{ task.title || '（无标题）' }}</h3>
+
+                    <p v-if="task.status === 'completed'" class="reg-sub">
+                      <b>证据</b>{{ task.evidence || '（未填写证据 —— 该任务不会产生成长成果）' }}
+                      <span v-if="task.completed_at" class="reg-sub-date">· {{ shortDate(task.completed_at) }} 完成</span>
+                    </p>
+                    <button
+                      v-else
+                      class="reg-submit reg-mobile-action"
+                      type="button"
+                      :disabled="readOnly"
+                      @click="openComplete(task)"
+                    >
+                      提交证据 →
+                    </button>
+                  </div>
+
+                  <div class="reg-skills">
+                    <span v-for="skill in task.skills || []" :key="skill">{{ skill }}</span>
+                    <span v-if="!(task.skills || []).length" class="is-none">未关联</span>
+                  </div>
+
+                  <span class="reg-status" :class="{ 'is-done': task.status === 'completed' }">
+                    {{ taskStatusText(task.status) }}
+                  </span>
+
+                  <button
+                    v-if="task.status !== 'completed'"
+                    class="reg-submit"
+                    type="button"
+                    :disabled="readOnly || submitting"
+                    @click="openComplete(task)"
+                  >
+                    提交 →
+                  </button>
+                  <span v-else></span>
+                </article>
+              </div>
+            </template>
+          </section>
+        </div>
+
+        <!-- 计划明细：只有最新一轮拿得到 -->
+        <section
+          v-if="planDetailRound && (learningPlan.length || projectPlan.length)"
+          class="reg-app"
+          id="reg-app"
+        >
+          <div class="reg-sec-head">
+            <h2>附 · 第 {{ planDetailRound.round }} 轮计划原文</h2>
+            <span>计划明细只有最新一轮可查</span>
+          </div>
+          <p class="reg-app-note">
+            下面是这一轮任务的出处：每个阶段要练到什么程度、每个项目要交出什么。
+            更早的轮次只留下任务计数，这里不做补全。
+          </p>
+
+          <div class="reg-app-grid">
+            <div v-if="learningPlan.length">
+              <h3>学习路线 <span>{{ learningPlan.length }} 个阶段</span></h3>
+              <ol class="reg-app-list">
+                <li v-for="(stage, i) in learningPlan" :key="i">
+                  <span class="reg-app-no">{{ pad2(i) }}</span>
+                  <div>
+                    <h4>
+                      {{ stage.topic || `阶段 ${stage.stage || i + 1}` }}
+                      <em v-if="stage.estimated_weeks">约 {{ stage.estimated_weeks }} 周</em>
+                    </h4>
+                    <p class="reg-app-meta">
+                      <span v-if="stage.goal">目标 {{ stage.goal }}</span>
+                      <span v-if="(stage.covers || []).length">覆盖缺口 {{ joinList(stage.covers) }}</span>
+                      <span>前置：{{ stage.prerequisite || '无特殊前置' }}</span>
+                    </p>
+                    <p v-if="stage.completion_criteria" class="reg-app-crit">
+                      <b>完成标准</b>{{ stage.completion_criteria }}
+                    </p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+
+            <div v-if="projectPlan.length">
+              <h3>实战项目 <span>{{ projectPlan.length }} 个项目</span></h3>
+              <ol class="reg-app-list">
+                <li v-for="(project, i) in projectPlan" :key="i">
+                  <span class="reg-app-no">{{ pad2(i) }}</span>
+                  <div>
+                    <h4>
+                      {{ project.name || `项目 ${i + 1}` }}
+                      <em v-if="project.difficulty || project.stage">
+                        {{ project.difficulty }}<template v-if="project.difficulty && project.stage"> · </template>{{ project.stage }}
+                      </em>
+                    </h4>
+                    <p class="reg-app-meta">
+                      <span v-if="project.goal">目标 {{ project.goal }}</span>
+                      <span>技术栈 {{ joinList(project.tech_stack) }}</span>
+                      <span>缺口 {{ joinList(project.covers_gaps) }}</span>
+                    </p>
+                    <p v-if="project.deliverable" class="reg-app-crit">
+                      <b>最终成果</b>{{ project.deliverable }}
+                    </p>
+                    <p v-if="project.blocked_reason" class="reg-app-meta is-warn">
+                      {{ project.blocked_reason }}
+                    </p>
+                  </div>
+                </li>
+              </ol>
             </div>
           </div>
         </section>
 
-        <!-- 计划明细：只有最新一轮拿得到 -->
-        <template v-if="planDetailRound">
-          <div v-if="(planDetailRound.learning_plan || []).length">
-            <LearningPlanList :stages="planDetailRound.learning_plan" agent-node="learning" />
-          </div>
-          <div v-if="(planDetailRound.project_plan || []).length">
-            <ProjectPlanList :projects="planDetailRound.project_plan" agent-node="project" />
-          </div>
-        </template>
-
-        <div v-else-if="showPlanLimitNote" class="notice notice-info">
-          这一轮只留下了任务计数，没有存阶段目标、完成标准和项目交付物的明细 ——
-          <strong>明细只有最新一轮可查</strong>，更早的轮次不做补全。
+        <div v-else-if="showPlanLimitNote" class="reg-app">
+          <p class="reg-app-note">
+            这一轮只留下了任务计数，没有存阶段目标、完成标准和项目交付物的明细 ——
+            <strong>明细只有最新一轮可查</strong>，更早的轮次不做补全。
+          </p>
         </div>
+
+        <footer class="reg-foot">
+          <span>清空任务清单只清这一页的任务；已经记进成长历史的升级一条都不会少。</span>
+          <span>共 {{ rounds.length }} 轮 · {{ summary.total }} 项任务</span>
+        </footer>
       </template>
-    </template>
+    </article>
+
+    <!-- 弹层挂到 body：留在视图根里会被切页的 opacity 动画困成新的层叠上下文，
+         窄屏时固定抽屉会被顶部移动条盖住。 -->
+    <Teleport to="body">
+    <!-- 提交证据：右侧抽屉，写证据时清单还在视野里 -->
+    <div v-if="completingTask" class="reg-sheet-backdrop" @click.self="closeComplete">
+      <section
+        class="reg-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tv-modal-title"
+        @keydown.esc="closeComplete"
+      >
+        <div class="reg-sheet__head">
+          <div>
+            <div class="reg-sheet__eyebrow">
+              任务 {{ taskNo(completingTask) }} · {{ taskKindText(completingTask.kind) }} ·
+              第 {{ completingTask.round }} 轮
+            </div>
+            <h2 id="tv-modal-title">提交完成证据</h2>
+          </div>
+          <button class="reg-sheet__close" type="button" aria-label="关闭" @click="closeComplete">
+            ×
+          </button>
+        </div>
+
+        <p class="reg-sheet__task">{{ completingTask.title || '（无标题）' }}</p>
+        <p class="reg-sheet__skills">
+          <template v-if="(completingTask.skills || []).length">
+            关联技能：{{ (completingTask.skills || []).join('、') }}
+          </template>
+          <template v-else>
+            这条任务没有关联技能 —— 提交只会留下一条完成记录，不会带来技能升级。
+          </template>
+        </p>
+
+        <div v-if="completingCriteria" class="reg-sheet__criteria">
+          <span>{{ completingCriteria.label }}</span>
+          <p>{{ completingCriteria.text }}</p>
+        </div>
+
+        <div class="reg-sheet__field">
+          <label for="tv-evidence">
+            实践证据
+            <small>
+              <template v-if="completingCriteria">
+                照上面的{{ completingCriteria.label }}，写你实际做了什么、留下了什么
+              </template>
+              <template v-else>具体做了什么、有什么产出</template>
+            </small>
+          </label>
+          <textarea
+            id="tv-evidence"
+            v-model="evidenceText"
+            rows="6"
+            placeholder="例：把登录和打卡两个页面搭完了，用 10 条真实数据自测通过，没有报错"
+          />
+          <div class="reg-sheet__count">
+            {{ evidenceText.trim().length }} / {{ EVIDENCE_MAX_LENGTH }}
+          </div>
+        </div>
+
+        <div v-if="evidenceError" class="notice notice-warn">{{ evidenceError }}</div>
+        <div v-if="submitError" class="notice notice-danger">{{ submitError }}</div>
+
+        <p class="reg-sheet__note">
+          <template v-if="(completingTask.skills || []).length">
+            提交后会同时得到三样东西：<strong>任务完成记录</strong>（真正落盘）、
+            <strong>成长成果</strong>（可能构不成）、<strong>技能升级预览</strong>（不会立刻写入成长历史）。
+          </template>
+          <template v-else>
+            这条提交只会留下一份<strong>任务完成记录</strong>（真正落盘），不会有成长成果，也不会有升级预览。
+          </template>
+        </p>
+
+        <div class="reg-sheet__foot">
+          <button class="btn" :disabled="submitting" @click="closeComplete">取消</button>
+          <button class="btn btn-primary" :disabled="submitting" @click="submit">
+            <span v-if="submitting" class="spinner" />
+            {{ submitting ? '提交中…' : '确认提交' }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- 清空弹层 -->
+    <div v-if="clearing" class="modal-backdrop" @click.self="closeClear">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tv-clear-title"
+        @keydown.esc="closeClear"
+      >
+        <div class="modal-head">
+          <h2 id="tv-clear-title">清空任务清单</h2>
+        </div>
+        <div class="modal-body">
+          <p class="muted flush-first">
+            会删掉 <strong>{{ rounds.length }}</strong> 轮、共
+            <strong>{{ summary.total }}</strong> 项任务（其中已完成
+            {{ summary.completed }} 项），删完这一页回到「还没有任务」的状态。
+          </p>
+
+          <dl class="kv kv--mid">
+            <dt>成长历史</dt>
+            <dd>不受影响。已经正式记下来的升级与成果一条都不会少。</dd>
+            <dt>原清单</dt>
+            <dd>清空前自动备份一份，照着备份名可以还原。</dd>
+            <dt>未记账成果</dt>
+            <dd>
+              <template v-if="pendingCount === null">
+                暂时查不到有没有。若真有，清空会先被拦住、一个字节都不删，回来告诉你条数。
+              </template>
+              <template v-else-if="pendingCount === 0">
+                没有。打卡攒下的成果都已经正式记账了。
+              </template>
+              <template v-else>
+                <strong class="is-warn">{{ pendingCount }} 条</strong>还没进成长历史，
+                清空会把这批真实进度一起带走。
+              </template>
+            </dd>
+          </dl>
+
+          <label v-if="clearNeedsAck" class="clear-ack">
+            <input v-model="dropPending" type="checkbox" />
+            <span>我确认连同这 {{ pendingCount }} 条未记账成果一起丢掉</span>
+          </label>
+
+          <div v-if="clearError" class="notice notice-danger">{{ clearError }}</div>
+
+          <div class="notice notice-info flush-last">
+            这里只清任务清单。想清空<b>画像与求职目标</b>，去「岗位分析」页用那边的清空按钮。
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" :disabled="clearBusy" @click="closeClear">取消</button>
+          <button class="btn btn-danger" :disabled="clearBusy || clearBlocked" @click="confirmClear">
+            <span v-if="clearBusy" class="spinner" />
+            {{ clearBusy ? '清空中…' : '确认清空' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    </Teleport>
   </div>
 </template>

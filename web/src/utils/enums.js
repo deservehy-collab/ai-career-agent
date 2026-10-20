@@ -210,16 +210,8 @@ export function taskKindText(value) {
   return lookup({ learning: '学习任务', project: '项目任务' }, value)
 }
 
-export function taskKindTone(value) {
-  return { learning: 'primary', project: 'ok' }[value] ?? 'muted'
-}
-
 export function taskStatusText(value) {
   return lookup({ pending: '待完成', completed: '已完成' }, value)
-}
-
-export function taskStatusTone(value) {
-  return { pending: 'muted', completed: 'ok' }[value] ?? 'muted'
 }
 
 // ── 提交任务完成的整体结论（agents/growth_loop.py LOOP_*）───────────────
