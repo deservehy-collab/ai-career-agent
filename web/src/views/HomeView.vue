@@ -11,9 +11,8 @@ import { formatDateTime, joinList } from '../utils/format'
 /**
  * 我的档案：只放"属于我自己"的东西 —— 画像、最近一次分析出的能力表、成长闭环。
  *
- * 原来这页顶部重复做了一遍概览页的 Hero 与四项知识库指标（同样请求
- * /api/knowledge/jds 与 /api/health），两个"首页"并排。指标归概览，
- * 本页改成纯本地档案视图，因此**不再发任何请求**（数据全在 profile store）。
+ * 原来这页顶部重复做了一遍概览页的 Hero 与指标（同样请求 /api/health），
+ * 两个"首页"并排。指标归概览，本页改成纯本地档案视图，因此**不再发任何请求**（数据全在 profile store）。
  */
 const profile = useProfileStore()
 

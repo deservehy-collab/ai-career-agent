@@ -73,7 +73,7 @@ from agents.loop_store import (
     TASK_COMPLETED,
     LoopStore,
 )
-from agents.retriever import SkillVocabulary
+from agents.skill_dict import SkillVocabulary
 
 
 class GrowthLoopError(RuntimeError):
@@ -166,12 +166,12 @@ def _task_skill_names(task) -> list[str]:
 
 
 def map_task_skills(task, vocabulary=None) -> dict:
-    """把任务关联技能映射到项目已有的**规范技能名**。
+    """把任务关联技能折算成成长记账用的技能键。
 
-    直接调用 ``growth_rules.normalize_skills()``（内部即
-    ``utils.build_skill_mapping`` + ``resolve_canonical``），因此与阶段五同一口径：
-    **只有唯一命中才采用**，没命中或有歧义一律进 ``unmapped``，
-    **绝不自动映射到相似技能**，也**绝不悄悄丢掉**（业务规则 8）。
+    直接调用 ``growth_rules.normalize_skills()``，因此与阶段五同一口径：
+    **唯一命中词表才折算成规范名**；词表没收录的（非 AI 岗位的缺口名）按原名记账
+    并照样列进 ``unmapped``；沾上多个的（歧义）丢弃。**绝不自动映射到相似技能**，
+    也**绝不悄悄丢掉**（业务规则 8）。
 
     返回 ``{raw, canonical, unmapped, vocabulary_available}``。
     """
@@ -339,7 +339,7 @@ def pending_growth_events(loop_store=None, growth_store=None, vocabulary=None) -
         canonical, missed = normalize_skills(built["event"]["skills"], vocabulary)
         if not canonical:
             skipped.append({"task_id": task.get("task_id"), "status": "skills_unmapped",
-                            "reason": f"技能名全部无法归一到规范技能名：{missed}"})
+                            "reason": f"技能名全部有歧义、无法确定对应哪个规范技能：{missed}"})
             continue
         fingerprint = event_fingerprint(built["event"]["type"],
                                         built["event"]["title"], canonical)

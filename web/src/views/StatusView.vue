@@ -8,7 +8,7 @@ import { storeStatusText, storeStatusTone } from '../utils/enums'
 
 /**
  * 系统状态页：直接展示 `GET /api/health` 的真实返回。
- * 四类依赖 —— Ollama / Chroma 索引 / 知识库 / 两个 store —— 逐项给出可达性与失败原因。
+ * 三类依赖 —— Ollama / 业务知识库 / 两个 store —— 逐项给出可达性与失败原因。
  */
 const health = useHealthStore()
 
@@ -24,7 +24,6 @@ const data = computed(() => health.data)
  */
 const SECTION_LABELS = {
   ollama: '本地模型服务',
-  index: '向量索引',
   knowledge: '业务知识库',
   stores: '运行数据存储',
   config: '生效配置',
@@ -44,8 +43,6 @@ const degradedImpacts = computed(() => {
   const list = []
   if (!d.ollama?.ok) list.push('岗位分析无法执行（模型推理不可用）')
   else if (!d.ollama.chat_model_ready) list.push('缺少对话模型，分析会失败')
-  else if (!d.ollama.embedding_model_ready) list.push('缺少嵌入模型，岗位检索会失败')
-  if (!d.index?.ok) list.push('岗位知识库检索会降级为「无证据」（分析仍可继续）')
   if (d.knowledge?.skills && !d.knowledge.skills.ok) list.push('技能前置门禁不会执行，升级判定偏宽松')
   if (d.knowledge?.projects && !d.knowledge.projects.ok) list.push('项目推荐可能为空')
   if (d.stores?.growth && !d.stores.growth.writable) list.push('成长历史不可写，成长记录无法更新')
@@ -126,14 +123,6 @@ const degradedImpacts = computed(() => {
                 :tone="data.ollama.chat_model_ready ? 'ok' : 'danger'"
               />
             </dd>
-            <dt>嵌入模型</dt>
-            <dd>
-              <code class="mono">{{ data.ollama.embedding_model }}</code>
-              <AppBadge
-                :text="data.ollama.embedding_model_ready ? '已安装' : '未安装'"
-                :tone="data.ollama.embedding_model_ready ? 'ok' : 'danger'"
-              />
-            </dd>
             <dt>已安装模型</dt>
             <dd>
               <div v-if="data.ollama.models?.length" class="tags">
@@ -149,71 +138,44 @@ const degradedImpacts = computed(() => {
         </div>
       </section>
 
-      <!-- 索引 + 知识库 -->
-      <div class="grid grid-2">
-        <section v-if="data.index" class="card card--flush">
-          <div class="card-head">
-            <h2>向量索引（Chroma）</h2>
-            <AppBadge :text="data.index.ok ? '正常' : '异常'" :tone="data.index.ok ? 'ok' : 'danger'" />
-          </div>
-          <div class="card-body">
-            <dl class="kv">
-              <dt>索引文件</dt>
-              <dd class="mono">{{ data.index.path }}</dd>
-              <dt>文件存在</dt>
-              <dd>{{ data.index.exists ? '是' : '否' }}</dd>
-              <dt>Collection</dt>
-              <dd>{{ data.index.collections ?? '—' }}</dd>
-              <dt>向量条数</dt>
-              <dd>{{ data.index.vectors ?? '—' }}</dd>
-              <dt v-if="data.index.error">错误</dt>
-              <dd v-if="data.index.error" class="mono is-error">
-                {{ data.index.error }}
-              </dd>
-            </dl>
-            <p class="faint flush-last">
-              索引缺失时检索会降级为"无证据"，但分析流程仍会继续。
-            </p>
-          </div>
-        </section>
-
-        <section v-if="data.knowledge" class="card card--flush">
-          <div class="card-head">
-            <h2>业务知识库</h2>
-            <AppBadge
-              :text="data.knowledge.skills.ok && data.knowledge.projects.ok ? '正常' : '异常'"
-              :tone="data.knowledge.skills.ok && data.knowledge.projects.ok ? 'ok' : 'danger'"
-            />
-          </div>
-          <div class="card-body">
-            <dl class="kv">
-              <dt>技能库</dt>
-              <dd>
-                <AppBadge
-                  :text="data.knowledge.skills.ok ? `${data.knowledge.skills.count} 项技能` : '加载失败'"
-                  :tone="data.knowledge.skills.ok ? 'ok' : 'danger'"
-                />
-                <div v-if="data.knowledge.skills.error" class="mono is-error">
-                  {{ data.knowledge.skills.error }}
-                </div>
-              </dd>
-              <dt>项目库</dt>
-              <dd>
-                <AppBadge
-                  :text="data.knowledge.projects.ok ? `${data.knowledge.projects.count} 个项目` : '加载失败'"
-                  :tone="data.knowledge.projects.ok ? 'ok' : 'danger'"
-                />
-                <div v-if="data.knowledge.projects.error" class="mono is-error">
-                  {{ data.knowledge.projects.error }}
-                </div>
-              </dd>
-            </dl>
-            <p class="faint flush-last">
-              技能库用于成长升级的前置门禁，项目库用于项目推荐排序。
-            </p>
-          </div>
-        </section>
-      </div>
+      <!-- 业务知识库 -->
+      <section v-if="data.knowledge" class="card card--top">
+        <div class="card-head">
+          <h2>业务知识库</h2>
+          <AppBadge
+            :text="data.knowledge.skills.ok && data.knowledge.projects.ok ? '正常' : '异常'"
+            :tone="data.knowledge.skills.ok && data.knowledge.projects.ok ? 'ok' : 'danger'"
+          />
+        </div>
+        <div class="card-body">
+          <dl class="kv">
+            <dt>技能库</dt>
+            <dd>
+              <AppBadge
+                :text="data.knowledge.skills.ok ? `${data.knowledge.skills.count} 项技能` : '加载失败'"
+                :tone="data.knowledge.skills.ok ? 'ok' : 'danger'"
+              />
+              <div v-if="data.knowledge.skills.error" class="mono is-error">
+                {{ data.knowledge.skills.error }}
+              </div>
+            </dd>
+            <dt>项目库</dt>
+            <dd>
+              <AppBadge
+                :text="data.knowledge.projects.ok ? `${data.knowledge.projects.count} 个项目` : '加载失败'"
+                :tone="data.knowledge.projects.ok ? 'ok' : 'danger'"
+              />
+              <div v-if="data.knowledge.projects.error" class="mono is-error">
+                {{ data.knowledge.projects.error }}
+              </div>
+            </dd>
+          </dl>
+          <p class="faint flush-last">
+            技能库用于成长升级的前置门禁与技能名归一，项目库用于项目推荐排序；
+            读不到时分析照常跑，但这两处会如实降低覆盖度并告警，不会伪造来源。
+          </p>
+        </div>
+      </section>
 
       <!-- 存储 -->
       <section v-if="data.stores" class="card card--top">
@@ -293,8 +255,6 @@ const degradedImpacts = computed(() => {
           <dl class="kv">
             <dt>对话模型</dt>
             <dd class="mono">{{ data.config.chat_model }}</dd>
-            <dt>嵌入模型</dt>
-            <dd class="mono">{{ data.config.embedding_model }}</dd>
             <dt>运行数据目录</dt>
             <dd class="mono">{{ data.config.runs_dir }}</dd>
             <dt>后台并发上限</dt>

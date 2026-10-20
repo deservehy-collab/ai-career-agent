@@ -4,25 +4,26 @@
    窄屏时侧边栏收为抽屉，顶部出现一条移动导航条。 */
 
 :root {
-  /* ── 中性色：页面底、卡片、边框、文字 ───────────────────────────── */
-  --bg: #f7f9f7;
+  /* ── 中性色：页面底、卡片、边框、文字（冷灰蓝阶，不带绿味）────────── */
+  --bg: #f5f7fa;
   --surface: #ffffff;
-  --surface-warm: #fbfcfa; /* 侧边栏 / 表头等轻微暖白 */
-  --surface-sunk: #eef2ef; /* 叙述型平台（panel）的沉底色：比页面底深一档，用来做层次而不是描边 */
-  --border: #e5e9e4;
-  --border-strong: #d3dad1;
-  --text: #333d39; /* 深灰，不用纯黑 */
-  --text-muted: #5f6a63; /* 对白 5.28:1 */
-  --text-faint: #69746c; /* 对白 4.56:1，用于辅助说明文字 */
+  --surface-warm: #f9fafc; /* 侧边栏 / 表头等轻微冷白 */
+  --surface-sunk: #e9eef4; /* 叙述型平台（panel）的沉底色：比页面底深一档，用来做层次而不是描边 */
+  --border: #e1e7ee;
+  --border-strong: #ccd6e2;
+  --text: #2b333d; /* 深墨，不用纯黑 */
+  --text-muted: #55606d; /* 对白 6.4:1 */
+  --text-faint: #66717f; /* 对白 4.9:1，用于辅助说明文字 */
 
-  /* ── 品牌色：薄荷/鼠尾草绿系 ──────────────────────────────────────
-     primary 同时承担「绿底上的白字」和「浅底上的绿字」，所以两个方向都要过 AA：
-     #2f7d55 对白带 5.02:1，对页面底带 4.7:1。primary-dark 只用于浅底上的文字。 */
-  --primary: #2f7d55;
-  --primary-dark: #256a46; /* 对 --primary-soft 底带 6.5:1 */
-  --primary-soft: #eaf4ee;
-  --primary-rgb: 47, 125, 85; /* 低透明度装饰底/光晕共用同一支绿 */
-  --aux-blue: #3a6cab;
+  /* ── 品牌色：墨蓝系 ────────────────────────────────────────────────
+     primary 同时承担「蓝底上的白字」和「浅底上的蓝字」，所以两个方向都要过 AA：
+     #24507d 对白带 7.8:1（AAA），对页面底带 7.4:1。primary-dark 只用于浅底上的文字。
+     绿从品牌位退下来，此后**只表示"完成/成功"**（--ok），不再兼任主操作色。 */
+  --primary: #24507d;
+  --primary-dark: #1a3c5f; /* 对 --primary-soft 底带 9.8:1 */
+  --primary-soft: #eaf0f7;
+  --primary-rgb: 36, 80, 125; /* 低透明度装饰底/光晕共用同一支墨蓝 */
+  --aux-blue: #3a6cab; /* 信息/提示蓝：比主色浅一档，同族但读得出层级 */
   --aux-blue-soft: #eef4fb;
 
   --ok: #2c7850;
@@ -60,13 +61,13 @@
   --control-h-sm: 30px;
 
   /* ── focus ring：全站唯一的键盘焦点样式，不出现在鼠标 hover 上 ────── */
-  --focus-ring: 0 0 0 3px rgba(47, 125, 85, 0.3);
+  --focus-ring: 0 0 0 3px rgba(36, 80, 125, 0.3);
 
   --radius: 12px;
   --radius-sm: 8px;
   --radius-lg: 16px;
-  --shadow: 0 1px 2px rgba(58, 68, 64, 0.05), 0 3px 10px rgba(58, 68, 64, 0.04);
-  --shadow-lg: 0 2px 6px rgba(58, 68, 64, 0.07), 0 12px 28px rgba(58, 68, 64, 0.09);
+  --shadow: 0 1px 2px rgba(42, 55, 72, 0.05), 0 3px 10px rgba(42, 55, 72, 0.04);
+  --shadow-lg: 0 2px 6px rgba(42, 55, 72, 0.07), 0 12px 28px rgba(42, 55, 72, 0.09);
 
   /* ── 尺寸变量（侧边栏宽度集中在这里）────────────────────────────── */
   --sidebar-w: 240px;
@@ -74,17 +75,19 @@
   --mobile-bar-h: 52px;
 
   /* ── Agent 色族（浅底可读版）───────────────────────────────────────
-     7 个 Agent 按阶段分 4 族；RAG（检索）单独一色，是全站唯一的紫，
-     用来把"岗位知识库检索"这条链路从其余环节里区分出来。
+     7 个 Agent 按阶段分 4 族；依据整理单独一色，是全站唯一的紫，
+     用来把「招聘原文 → 岗位要求」这条溯源链路从其余环节里区分出来。
+     换主色为墨蓝后，规划族从原来的绿改成玫红：绿色**整族让给"完成"语义**，
+     否则「规划卡片」和「已完成标记」在同一个界面上会长得一模一样。
      色值一律过 AA（对各自 soft 底 ≥4.5:1），组件（utils/agents.js）只引用变量。 */
-  --agent-cognition: #3a6cab;
+  --agent-cognition: #3a6cab; /* 认知 · 信息蓝，比主色浅一档 */
   --agent-cognition-soft: #eef4fb;
-  --agent-retrieval: #6f5aa6;
+  --agent-retrieval: #6f5aa6; /* 依据 · 紫 */
   --agent-retrieval-soft: #f2effa;
-  --agent-match: #28707b;
+  --agent-match: #28707b; /* 匹配 · 青 */
   --agent-match-soft: #e8f5f6;
-  --agent-plan: #2c7850;
-  --agent-plan-soft: #e9f5ee;
+  --agent-plan: #9c4f6b; /* 规划 · 玫红（原为绿，对 soft 带 4.9:1） */
+  --agent-plan-soft: #f8eef2;
 }
 
 * {
@@ -354,7 +357,7 @@ input[type="checkbox"] {
 }
 
 .sidebar-collapse:hover {
-  background: rgba(58, 68, 64, 0.06);
+  background: rgba(42, 55, 72, 0.06);
   color: var(--text-muted);
 }
 
@@ -442,7 +445,7 @@ input[type="checkbox"] {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(58, 68, 64, 0.32);
+    background: rgba(42, 55, 72, 0.32);
     z-index: 35;
   }
 
@@ -1102,7 +1105,7 @@ details.fold > .fold-body {
   opacity: 0.55;
 }
 
-/* 该节点降级（检索未命中 / 产出为空）—— 只描述结果，不描述执行过程 */
+/* 该节点降级（没有原文可依 / 产出为空）—— 只描述结果，不描述执行过程 */
 .agent-node.is-degraded::before {
   background: var(--warn);
 }
@@ -1231,7 +1234,7 @@ button.chip {
   border-radius: var(--radius-sm);
 }
 
-/* ── 指标条（RAG 检索状态等）───────────────────────────────────────── */
+/* ── 指标条（一排小计数）─────────────────────────────────────────── */
 .metric-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
@@ -1361,7 +1364,7 @@ button.chip {
   display: grid;
   gap: var(--sp-3);
   align-content: start;
-  /* 页面底(#f7f9f7)与白卡几乎同色，读数栏先落到 tier-1，白行才浮得出来 */
+  /* 页面底(#f5f7fa)与白卡几乎同色，读数栏先落到 tier-1，白行才浮得出来 */
   background: var(--surface-sunk);
   border-radius: var(--radius-lg);
   padding: var(--sp-4) var(--sp-4) var(--sp-3);
@@ -1590,9 +1593,8 @@ button.chip {
   font-weight: 700;
 }
 
-.ov-station-no code {
-  font-family: ui-monospace, Consolas, monospace;
-  font-weight: 400;
+.ov-station-group {
+  font-weight: 500;
   color: var(--text-muted);
 }
 
@@ -1711,10 +1713,10 @@ button.chip {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   RAG 证据面板
+   招聘原文面板
    ══════════════════════════════════════════════════════════════════════ */
 
-/* 证据条：白底 + 一圈 1px 描边。检索色的身份由 E 编号芯片和原文底色承担，
+/* 原话条目：白底 + 一圈 1px 描边。依据色的身份由 E 编号芯片和原文底色承担，
    不再额外挂一条左侧装饰边（脊柱才是这条链路该出现的地方）。 */
 .evidence-item {
   background: var(--surface);
@@ -1736,7 +1738,7 @@ button.chip {
   margin-bottom: 7px;
 }
 
-/* 证据原文用检索色打底，和"学生能力"的表述在视觉上区分开 */
+/* 原话用依据色打底，和"学生能力"的表述在视觉上区分开 */
 .evidence-quote {
   margin: 0;
   padding: 7px 10px;
@@ -1744,12 +1746,6 @@ button.chip {
   background: var(--agent-retrieval-soft);
   font-size: var(--fs-sm);
   line-height: 1.65;
-}
-
-/* 原文出处紧贴原文下方，只留一档间距 */
-.evidence-ctx {
-  margin: 4px 0 0;
-  font-size: var(--fs-xs);
 }
 
 .evidence-meta {
@@ -1761,7 +1757,7 @@ button.chip {
   color: var(--text-muted);
 }
 
-/* "被 N 条岗位要求引用" —— 追溯性的视觉锚点，用检索色强调 */
+/* "被 N 条岗位要求引用" —— 追溯性的视觉锚点，用依据色强调 */
 .evidence-refback {
   color: var(--agent-retrieval);
   font-weight: 600;
@@ -1843,7 +1839,7 @@ button.chip {
   margin-left: var(--sp-2);
 }
 
-/* ── 轮次筛选：胶囊分段控件，选中态填充品牌绿 ───────────────────────── */
+/* ── 轮次筛选：胶囊分段控件，选中态填充品牌墨蓝 ─────────────────────── */
 .round-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -1868,11 +1864,11 @@ button.chip {
   line-height: 1.7;
 }
 
-/* ── 模态（提交证据）─────────────────────────────────────────────────── */
+/* ── 模态（提交证据 / 清空任务清单）───────────────────────────────────── */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(58, 68, 64, 0.38);
+  background: rgba(42, 55, 72, 0.38);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1933,12 +1929,61 @@ button.chip {
   font-size: var(--fs-sm);
 }
 
+/* 紧跟任务标题那行小字：关联技能，或者"没关联技能会怎样" —— 提交前就该知道 */
+.modal-task-skills {
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+
+/* 任务原本的完成标准（从计划明细回填的原文）：做成引用语义，
+   一眼分得清"这是任务要求的"，下面文本框里要写的才是自己的话 */
+.modal-criteria {
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-sunk);
+}
+
+.modal-criteria__label {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.modal-criteria__text {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+}
+
 .modal-foot {
   padding: var(--sp-3) var(--sp-5);
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* 破坏性操作前的"我确实看懂了"闸门：整行可点，勾上才放行确认按钮 */
+.clear-ack {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding: 9px 11px;
+  border: 1px solid #f3cfcf;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: #9c2a2a;
+  cursor: pointer;
+}
+
+.clear-ack input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--danger);
+  cursor: pointer;
 }
 
 /* ── 成长历史时间线 ─────────────────────────────────────────────────── */
@@ -1979,26 +2024,21 @@ button.chip {
 /* ── 登录 / 注册：左品牌区 + 右表单区分栏 ─────────────────────────────
    两页共用 AuthShell / AuthField，样式全在这组 .auth-* 类里，
    不复用 .card —— 认证页不该长得像系统内部的一张卡片。 */
-/* 森林绿只在这两个页面生效：改 .auth-shell 上的变量，靠级联覆盖内部所有
-   .btn-primary / input / label / a。全站 --primary 不动，推不推全站另说。 */
+/* 认证页不再自带一套品牌色：主色已经全站换成墨蓝，这里只留"页面级"的微差
+   （更冷的底、更深的标题墨、自己的阴影档）。原来那 5 行 --primary* 覆盖删掉，
+   .btn-primary / input / label / a 全部直接吃 :root，两处不同绿的分叉从此消失。 */
 .auth-shell {
-  --primary: #1e5c46;
-  --primary-dark: #14452f;
-  --primary-soft: #eaf1ec;
-  --primary-rgb: 30, 92, 70;
-  --mint: #e8f5f0;
-  --bg: #f7f8f6;
-  --surface-warm: #fafbf9;
-  --text: #131c18;
-  --text-muted: #46534c;
-  --text-faint: #7c8b84;
-  --border: #e4e8e3;
-  --border-strong: #d8ded7;
-  --focus-ring: 0 0 0 4px rgba(30, 92, 70, 0.13);
+  --haze: #eaf1f8; /* 首屏渐变的起点（旧名 --mint，那是森林绿时代的产物） */
+  --bg: #f6f8fb;
+  --surface-warm: #fafbfd;
+  --text: #16202b;
+  --text-muted: #46525f;
+  --text-faint: #677482; /* 对白 4.8:1 */
+  --border: #e3e8ef;
+  --border-strong: #d6dde7;
   /* 悬浮感靠阴影分层，不靠描边和渐变：近层定形状，远层大扩散制造高度 */
-  --auth-shadow-card: 0 1px 2px rgba(19, 28, 24, 0.04), 0 2px 6px rgba(19, 28, 24, 0.04),
-    0 24px 48px -24px rgba(19, 28, 24, 0.16);
-  --auth-shadow-soft: 0 1px 2px rgba(19, 28, 24, 0.04), 0 12px 28px -18px rgba(19, 28, 24, 0.12);
+  --auth-shadow-card: 0 1px 2px rgba(22, 32, 43, 0.04), 0 2px 6px rgba(22, 32, 43, 0.04),
+    0 24px 48px -24px rgba(22, 32, 43, 0.16);
 
   display: flex;
   min-height: 100vh;
@@ -2006,7 +2046,7 @@ button.chip {
      渐变会在左右两侧各留一条没染到的白边。内容改用 padding-inline 收在
      1320px 内，视觉宽度不变。 */
   padding-inline: max(24px, calc((100% - 1320px) / 2));
-  background: linear-gradient(135deg, var(--mint) 0%, #ffffff 45%, #ffffff 100%);
+  background: linear-gradient(135deg, var(--haze) 0%, #ffffff 45%, #ffffff 100%);
 }
 
 /* 47% 是给左栏留够实宽的：再窄一档，能力清单就会从两列掉回单列，
@@ -2092,28 +2132,27 @@ button.chip {
   gap: 14px;
 }
 
-/* 圆形薄荷底。刻意不用 --mint 实色：图标正好落在渐变最绿的左上区域，
-   同色会糊成一片。改用主色 12% 透明底 —— 白底上看是薄荷，压在渐变上
-   仍深一档，两种背景下都有对比。图标本身要压到 20px + 深主色：18px 细
-   线放在这圈淡底上几乎看不见，第 4 个上升箭头最先糊掉。 */
+/* 方形白底 + 主色描线。原来的圆形 12% 淡底压在冷雾渐变上几乎没有对比，
+   20px 细线图标糊成一团；第 2 个图标自己带一圈外框，套进圆底更像"双环"。
+   所以底换成实色白卡（渐变上也能浮住），图标放到 22px。 */
 .auth-pillar-icon {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: rgba(var(--primary-rgb), 0.12);
-  box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.1);
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(22, 32, 43, 0.06), inset 0 0 0 1px var(--border);
 }
 
 /* color 只能落在 svg 上：说明文字那条 .auth-pillars span (0,1,1) 会盖掉
    .auth-pillar-icon (0,1,0) 的 color，图标于是一直是灰色。 */
 .auth-pillar-icon svg {
-  width: 20px;
-  height: 20px;
-  color: var(--primary-dark);
+  width: 22px;
+  height: 22px;
+  color: var(--primary);
 }
 
 .auth-pillars strong {
@@ -2132,101 +2171,6 @@ button.chip {
   color: var(--text-faint);
 }
 
-/* ── 成长轨迹卡：品牌区的唯一"作品展示"，纯静态、不发请求 ─────────────
-   四段等级条对应真实的四档能力等级，"每轮最多升一档"对应 growth_rules 的 R2。 */
-.auth-ladder {
-  margin-top: 40px;
-  max-width: 520px;
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--auth-shadow-soft);
-  animation: auth-rise 0.32s ease-out 0.12s both;
-}
-
-.auth-ladder-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.auth-ladder-title {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-
-.auth-ladder-round {
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-}
-
-.auth-ladder-rows {
-  display: grid;
-  gap: 14px;
-  margin-top: 18px;
-}
-
-.auth-ladder-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-}
-
-.auth-ladder-skill {
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 等级条放在技能名下方：两列布局下不会被长技能名挤掉，窄屏也不用重排 */
-.auth-ladder-bars {
-  grid-column: 1;
-  display: flex;
-  gap: 4px;
-  margin-top: 6px;
-}
-
-.auth-ladder-seg {
-  width: 26px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--border);
-}
-
-.auth-ladder-seg.is-on {
-  background: var(--primary);
-}
-
-.auth-ladder-level {
-  grid-row: 1;
-  grid-column: 2;
-  align-self: start;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-
-/* 本轮升过级的条目：绿色 + 箭头是这页唯一一处强调，别的地方都要让位 */
-.auth-ladder-level.is-up {
-  color: var(--primary);
-  font-weight: 600;
-}
-
-.auth-ladder-note {
-  margin: 18px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-  font-size: var(--fs-xs);
-  line-height: 1.6;
-  color: var(--text-faint);
-}
 
 /* 表单是浮起的白卡：浅底 + 极淡描边 + 三层阴影。
    横向内边距刻意收窄，让 440px 的卡片两侧留出空气 —— 卡片被空着包围，
@@ -2363,7 +2307,7 @@ button.chip {
 }
 
 /* 体验账号条：左读数右动作，一行解决。底色用主色浅档 + 实描边，
-   视觉重量刻意低于实心绿色的「登录」按钮，不跟它抢。 */
+   视觉重量刻意低于实心主色的「登录」按钮，不跟它抢。 */
 .auth-demo {
   display: flex;
   align-items: center;
@@ -2479,7 +2423,6 @@ button.chip {
 
 @media (prefers-reduced-motion: reduce) {
   .auth-brand-inner,
-  .auth-ladder,
   .auth-form,
   .auth-alert {
     animation: none;
@@ -2514,9 +2457,8 @@ button.chip {
     font-size: 26px;
   }
 
-  /* 窄屏首屏寸土寸金：能力清单与轨迹卡让位给表单，只留主张和一句话定位 */
-  .auth-pillars,
-  .auth-ladder {
+  /* 窄屏首屏寸土寸金：能力清单让位给表单，只留主张和一句话定位 */
+  .auth-pillars {
     display: none;
   }
 
@@ -2562,14 +2504,14 @@ button.chip {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cfd8cf;
+  background: #c9d3df;
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #b7c3b7;
+  background: #a8b6c6;
   background-clip: content-box;
 }
 
@@ -2737,7 +2679,7 @@ input:-webkit-autofill:focus {
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
-  box-shadow: 0 1px 2px rgba(58, 68, 64, 0.04);
+  box-shadow: 0 1px 2px rgba(42, 55, 72, 0.04);
   transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease,
     transform 0.16s ease;
 }
@@ -2751,7 +2693,7 @@ input:-webkit-autofill:focus {
 
 .quick-item:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(58, 68, 64, 0.06);
+  box-shadow: 0 1px 2px rgba(42, 55, 72, 0.06);
 }
 
 .quick-text {
@@ -2825,9 +2767,11 @@ input:-webkit-autofill:focus {
   border-color: rgba(var(--primary-rgb), 0.3);
 }
 
+/* AI 侧从"信息蓝"改走青族：主色变墨蓝以后，蓝点 vs 蓝气泡分不出谁是谁。
+   青（--agent-match 同族）与墨蓝同为冷色但色相不同，身份一眼可辨。 */
 .msg-assistant {
   max-width: 960px;
-  border-color: #cdddf0;
+  border-color: #bfe0e4;
 }
 
 .msg-meta {
@@ -2837,14 +2781,14 @@ input:-webkit-autofill:focus {
   margin-bottom: 6px;
 }
 
-/* 身份色点：AI 用蓝、你用绿，与各自主气泡的底色呼应，替代多一套头像 */
+/* 身份色点：AI 用青、你用墨蓝，与各自主气泡的底色呼应，替代多一套头像 */
 .msg-dot {
   flex: 0 0 8px;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--aux-blue);
-  box-shadow: 0 0 0 3px var(--aux-blue-soft);
+  background: var(--agent-match);
+  box-shadow: 0 0 0 3px var(--agent-match-soft);
 }
 
 .msg-user .msg-dot {
@@ -2987,7 +2931,7 @@ input:-webkit-autofill:focus {
   border-top: 1px solid var(--border);
   padding: 12px 16px 13px;
   background: var(--surface);
-  box-shadow: 0 -10px 20px -16px rgba(58, 68, 64, 0.24);
+  box-shadow: 0 -10px 20px -16px rgba(42, 55, 72, 0.24);
 }
 
 /* 输入区默认浅底、聚焦转白：一眼看出光标在哪 */
@@ -3000,7 +2944,7 @@ input:-webkit-autofill:focus {
 }
 
 .chat-input:hover {
-  border-color: #c6d1c4;
+  border-color: #c2cedc;
 }
 
 .chat-input:focus {
@@ -3093,7 +3037,7 @@ input:-webkit-autofill:focus {
       agent 色只出现在结构线（脊柱 / 阶段线）上，不当卡片装饰边。
    ══════════════════════════════════════════════════════════════════════ */
 
-/* 沉底面板里的分块：一块是画像、一块是检索范围，用一条发丝线分格，
+/* 沉底面板里的分块：一块是画像、一块是招聘原文，用一条发丝线分格，
    不再各自套一张白框（嵌套卡在概览页就被否掉了）。 */
 .panel-block + .panel-block {
   margin-top: var(--sp-6);
@@ -3149,57 +3093,9 @@ input:-webkit-autofill:focus {
   margin-bottom: 0;
 }
 
-/* 检索范围三选一：原生单选留在白片里，选中态抬到品牌绿。
-   这是「一组互斥选项」，不是三个按钮，所以不复用 .btn。 */
-.mode-opts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-}
-
-.mode-opt {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: var(--control-h);
-  padding: 0 14px 0 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
-}
-
-.mode-opt:hover {
-  border-color: var(--primary);
-  color: var(--text);
-}
-
-.mode-opt.is-on {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-  color: var(--primary-dark);
-  font-weight: 600;
-}
-
-.mode-opt input[type="radio"] {
-  margin: 0;
-}
-
 /* 窄标签列：项目 / JD 预览这类「标签很短」的账本 */
 .kv.kv--narrow {
   grid-template-columns: 76px minmax(0, 1fr);
-}
-
-/* 分组标题：它下面的控件是一组（单选组），不是单个字段的 label */
-.field .field-label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 5px;
-  font-size: var(--fs-sm);
 }
 
 /* ── 学习路线：阶段顺序是真实信息，所以给它一条阶段脊柱 ──────────────── */
@@ -3284,7 +3180,38 @@ input:-webkit-autofill:focus {
 }
 
 .data--req th:nth-child(5) {
-  width: 130px;
+  width: 260px;
+}
+
+/* 岗位要求逐条反显的原话：引文样式，和「说明」那种自述文字区分开 */
+.quote-list {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+}
+
+.quote-list li {
+  padding-left: 9px;
+  border-left: 2px solid var(--primary-soft);
+  margin-bottom: var(--sp-1);
+}
+
+.quote-list li:last-child {
+  margin-bottom: 0;
+}
+
+/* 整栏只是模型推测（没有任何依据材料）时的卡片：不做红叉恐吓，但要有"虚"的观感 */
+.card.is-uncertain {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: var(--surface-warm);
+}
+
+.card.is-uncertain .quote-list li {
+  border-left-color: var(--border-strong);
 }
 
 .data--gaps th:nth-child(1) {
@@ -3475,12 +3402,6 @@ input:-webkit-autofill:focus {
   width: 90px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .mode-opt {
-    transition: none;
-  }
-}
-
 /* ══════════════════════════════════════════════════════════════════════
    内页观感统一：切页进场、卡头分层、表格行反馈、等待骨架
    —— 沿用登录页那一套节奏（进场只给层次，不给静态块加"可点"的假 affordance）
@@ -3567,7 +3488,7 @@ table.data tbody tr {
 }
 
 table.data tbody tr:hover {
-  background: #f4f9f5;
+  background: #f1f5fa;
 }
 
 /* ── 等待骨架：纯灰条，没有任何数字与文字，不暗示完成度 ──────────────── */
@@ -3588,7 +3509,7 @@ table.data tbody tr:hover {
 
 .sk-bar {
   border-radius: 6px;
-  background: linear-gradient(90deg, #edf1ed 25%, #f6f8f6 45%, #edf1ed 65%);
+  background: linear-gradient(90deg, #e8edf3 25%, #f4f7fa 45%, #e8edf3 65%);
   background-size: 320px 100%;
   animation: sk-sweep 1.3s ease-in-out infinite;
 }
@@ -3648,10 +3569,10 @@ table.data tbody tr:hover {
   /* 降级动效时骨架停在静态浅灰，仍然能读出"这里在等结果" */
   .sk-bar {
     animation: none;
-    background: #edf1ed;
+    background: #e8edf3;
   }
 
-  /* 轨级状态线停成一条静止的绿线： still 读出「整条链路在跑」，
+  /* 轨级状态线停成一条静止的墨蓝线： still 读出「整条链路在跑」，
      但不循环播放。节点 hover 的横向位移一并取消。 */
   .agent-rail.is-running::before,
   .progress-indeterminate::after {

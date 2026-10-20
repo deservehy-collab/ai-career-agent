@@ -57,7 +57,7 @@ const nodes = computed(() =>
       ...agent,
       colorStyle: { '--agent-color': group.color, '--agent-soft': group.soft },
       output: outputOf(agent),
-      tip: `${agent.source}\n\n${agent.duty}`,
+      tip: agent.duty,
     }
   }),
 )
@@ -110,19 +110,16 @@ function goTo(agent) {
     </div>
 
     <div v-if="isRunning" class="notice notice-info">
-      后台正按顺序执行全部 7 个节点。后端只提供「排队 / 执行中 / 完成 / 失败」四种<strong>整体</strong>状态，
-      没有单节点进度信息，因此这里不标记任何节点为"正在执行"。
+      七个步骤正在依次进行，跑完后一次给出全部结果。中间步骤不给单独进度，请等它跑完。
     </div>
 
     <div v-else-if="isInterrupted" class="notice notice-danger">
-      执行中断。后端只返回一条错误信息，<strong>无法定位是哪个节点失败的</strong>，
-      因此这里不指向任何具体节点。错误详情见右侧进度卡。
+      执行中断。暂时定位不到是哪一步出的问题，所以这里不指向具体节点 ——
+      错误原因见右侧进度卡。
     </div>
 
     <p v-else-if="summary" class="faint block-note">
       点击任一节点可跳转到它在结果区对应的卡片。
     </p>
-
-    <p class="faint block-note">graph/workflow.py · ORDER</p>
   </section>
 </template>

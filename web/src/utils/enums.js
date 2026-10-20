@@ -107,14 +107,14 @@ export function levelTone(value) {
 
 // ── 证据强度（agents/job_agent.py 的 _attach_evidence）─────────────────
 // 真实取值只有三个：supported / partially_supported / model_supplement。
-//   supported           —— 技能名与证据完全同名，且规则层直接命中
-//   partially_supported —— 仅靠别名/语义相关，证据强度弱于前者
-//   model_supplement    —— 证据里根本没有，这条要求是模型补充的（**不等于有证据**）
+//   supported           —— 技能名在原话里逐字出现（能自己确认的最强依据）
+//   partially_supported —— 只靠别名/语义对上，强度弱于前者
+//   model_supplement    —— 原话里根本没有，这条要求是模型补充的（**不等于有依据**）
 // 文案与色调都从这里取，避免同一套词在 Text / Tone 两处各写一遍而漂移。
 const EVIDENCE_STATUS = {
-  supported: { text: '有直接证据', tone: 'ok' },
-  partially_supported: { text: '仅弱证据（别名/语义相关）', tone: 'warn' },
-  model_supplement: { text: '模型补充（无知识库证据）', tone: 'warn' },
+  supported: { text: '原话里有这句', tone: 'ok' },
+  partially_supported: { text: '弱证据（别名/语义相关）', tone: 'warn' },
+  model_supplement: { text: '模型补充（原话里没提）', tone: 'warn' },
 }
 
 export function evidenceStatusText(value) {
@@ -123,11 +123,6 @@ export function evidenceStatusText(value) {
 
 export function evidenceStatusTone(value) {
   return EVIDENCE_STATUS[value]?.tone ?? 'muted'
-}
-
-/** 这条要求是否真的被知识库证据支撑（model_supplement 不算）。 */
-export function hasKnowledgeBaseEvidence(value) {
-  return value === 'supported' || value === 'partially_supported'
 }
 
 // ── 判断依据来源（agents/job_agent.py）─────────────────────────────────
@@ -163,12 +158,31 @@ export function levelOriginTone(value) {
   return LEVEL_ORIGIN[value]?.tone ?? 'muted'
 }
 
-// ── 检索状态（agents/retriever.py STATUS_*）────────────────────────────
+// ── 本次岗位要求的主依据（backend/analyze.py requirement_basis）─────────
+// 两档，决定「岗位要求」整栏的可信度呈现方式：用户原文逐条可反查；
+// 纯模型脑补必须标灰且**不给匹配度百分比**。
+const REQUIREMENT_BASIS = {
+  user_pasted: { text: '依据：你粘贴的招聘要求原文', tone: 'ok' },
+  model_only: { text: '依据不足：以下由模型推断，未经任何招聘原文核实', tone: 'danger' },
+}
+
+export function requirementBasisText(value) {
+  return REQUIREMENT_BASIS[value]?.text ?? (value ? String(value) : '—')
+}
+
+export function requirementBasisTone(value) {
+  return REQUIREMENT_BASIS[value]?.tone ?? 'muted'
+}
+
+/** 这一次分析有没有"能当真"的依据（只有用户粘贴的原文算）。 */
+export function hasSolidBasis(value) {
+  return value === 'user_pasted'
+}
+
+// ── 依据整理状态（agents/retrieval_agent.py STATUS_*）───────────────────
 const RETRIEVAL_STATUS = {
-  matched: '命中',
-  not_mentioned: '知识库未提及',
-  no_source: '无可用来源',
-  ambiguous: '命中不唯一，需澄清',
+  user_pasted: '用你给的原文',
+  no_source: '没有原文可依',
 }
 
 export function retrievalStatusText(value) {
@@ -176,57 +190,19 @@ export function retrievalStatusText(value) {
 }
 
 export function retrievalStatusTone(value) {
-  return { matched: 'ok', ambiguous: 'warn', not_mentioned: 'muted', no_source: 'warn' }[value] ?? 'muted'
+  return { user_pasted: 'ok', no_source: 'warn' }[value] ?? 'muted'
 }
 
-// 命中路径（agents/retriever.py diagnostics["match_kind"]）—— 决定这次 RAG 的可信度。
-//   exact_skill —— 技能精确/别名匹配 + 全量核对（最可靠）
-//   overview    —— 整体性问题，按技能聚合，跨公司体现共性
-//   vector_only —— 只由语义相似度排序，**未经技能词校验**，可信度最低
-//   term_scan   —— 内容词在资料里完全找不到，判为未提及
-const MATCH_KIND = {
-  exact_skill: { text: '技能精确匹配 + 全量核对', tone: 'ok' },
-  overview: { text: '整体聚合（按技能汇总跨公司共性）', tone: 'primary' },
-  vector_only: { text: '仅向量语义排序（未经技能词校验）', tone: 'warn' },
-  term_scan: { text: '词面核对未找到', tone: 'muted' },
-}
-
-export function matchKindText(value) {
-  return MATCH_KIND[value]?.text ?? (value ? String(value) : '—')
-}
-
-export function matchKindTone(value) {
-  return MATCH_KIND[value]?.tone ?? 'muted'
-}
-
-// diagnostics["reason"] 有两种形态（agents/retriever.py）：
-//   - 大多数情况下是**完整的中文句子**（如"查询涉及多家公司，需要澄清后再检索…"）→ 原样透出
-//   - 少数是**机器标识**（index_missing / index_unavailable）→ 必须翻译，不能把英文标识直接摆给用户看
+// retrieval_diagnostics["reason"] 绝大多数是一句完整中文，直接透出；
+// 只有少数机器标识需要翻译，不能把英文标识摆给用户看。
 const RETRIEVAL_REASON_TOKENS = {
-  index_missing: '向量索引不存在（尚未构建，可运行 scripts/build_index.py 重建）',
-  index_unavailable: '向量索引无法打开（后端异常，详见下方错误）',
+  user_jd_empty: '粘贴的原文里没切出可用的句子（可能只粘了个标题），下面的岗位要求全是模型推测',
 }
 
 export function retrievalReasonText(value) {
   const text = String(value ?? '').trim()
   if (!text) return ''
   return RETRIEVAL_REASON_TOKENS[text] ?? text
-}
-
-// 单条证据的来源路径（agents/retriever.py 给每条 evidence 打的 "origin"）。
-// 三个真实取值，决定"这条证据是怎么被找到的"：
-const EVIDENCE_ORIGIN = {
-  skill_exact: { text: '技能精确匹配', tone: 'ok' },
-  vector: { text: '向量语义召回', tone: 'warn' },
-  overview: { text: '整体聚合（跨公司共性）', tone: 'primary' },
-}
-
-export function evidenceOriginText(value) {
-  return EVIDENCE_ORIGIN[value]?.text ?? (value ? String(value) : '—')
-}
-
-export function evidenceOriginTone(value) {
-  return EVIDENCE_ORIGIN[value]?.tone ?? 'muted'
 }
 
 // ── 任务（agents/loop_store.py）────────────────────────────────────────

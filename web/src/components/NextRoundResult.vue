@@ -37,7 +37,7 @@ const isShortCircuit = computed(
     <!-- 三个独立状态，互不替代 -->
     <div class="metric-strip result-note">
       <div class="metric">
-        <div class="metric-label">新轮次（runs/loop.json）</div>
+        <div class="metric-label">新任务清单</div>
         <div class="metric-value">
           <AppBadge
             :text="r.round_created ? `第 ${r.round_no} 轮已创建` : '未创建'"
@@ -46,7 +46,7 @@ const isShortCircuit = computed(
         </div>
       </div>
       <div class="metric">
-        <div class="metric-label">成长历史（runs/growth.json）</div>
+        <div class="metric-label">成长历史</div>
         <div class="metric-value">
           <AppBadge
             :text="r.history_written ? '已写入' : '未写入'"
@@ -77,8 +77,6 @@ const isShortCircuit = computed(
           :tone="growthOutcomeTone(r.growth_outcome)"
         />
       </dd>
-      <dt>写入状态</dt>
-      <dd class="mono">{{ r.history_write_status || '（无需写入）' }}</dd>
       <template v-if="r.target_job">
         <dt>目标岗位</dt>
         <dd>{{ r.target_job }}</dd>

@@ -14,7 +14,7 @@ import {
   storeStatusText,
   storeStatusTone,
 } from '../utils/enums'
-import { formatDateTime, joinList } from '../utils/format'
+import { formatDateTime, formatRunError, joinList } from '../utils/format'
 
 /**
  * 成长记录页。
@@ -112,6 +112,9 @@ async function confirmGenerate() {
 
   const body = { user_profile: profile.toRequestProfile() }
   if (profile.targetJob.trim()) body.target_job = profile.targetJob.trim()
+  // 沿用分析页粘过的那份原文：让用户不必为同一份招聘要求重粘第二次。
+  // 原文只跟着请求走，不写进 runs/loop.json —— 换岗位时旧原文自然失效。
+  if (profile.hasJdText && !profile.jdTextOverflow) body.jd_text = profile.jdText.trim()
 
   try {
     const accepted = await startNextRound(body)
@@ -127,7 +130,7 @@ async function confirmGenerate() {
     if (record.status === 'succeeded') {
       runResult.value = record.result || null
     } else {
-      runError.value = record.error || '生成失败，但后端未给出错误信息。'
+      runError.value = formatRunError(record.error, '生成失败，但后端未给出错误信息。')
     }
     await load()
   } catch (error) {
@@ -287,8 +290,8 @@ async function submitManualEvent() {
                 </p>
                 <div class="evidence-meta">
                   <span>涉及技能：{{ joinList(event.skills, '（未关联技能）') }}</span>
-                  <span v-if="pendingTasks[i]" class="mono">
-                    来源任务：{{ pendingTasks[i].task_id }}
+                  <span v-if="pendingTasks[i]">
+                    来源任务：{{ pendingTasks[i].title || '本轮任务' }}
                   </span>
                 </div>
               </article>
@@ -447,9 +450,8 @@ async function submitManualEvent() {
           <div v-if="blockedReason" class="notice notice-warn">{{ blockedReason }}</div>
 
           <div class="notice notice-danger">
-            <strong>这是全系统唯一会写入成长数据的操作。</strong>
-            它会重跑整条流水线（含多次本地模型推理，通常需要数十秒到数分钟），
-            并把本轮成果正式写入 <span class="mono">runs/growth.json</span>。
+            <strong>这是全站唯一会正式改写成长记录的操作。</strong>
+            它会重新跑一遍七个步骤（通常要几十秒到几分钟），并把这一轮的成果正式记进成长历史。
           </div>
 
           <div class="btn-row">
@@ -461,15 +463,21 @@ async function submitManualEvent() {
               将携带画像：{{ profile.major || '未填专业' }} / {{ profile.grade || '未填年级' }} /
               {{ profile.skills.length }} 项技能
             </span>
+            <span v-if="profile.hasJdText" class="faint">
+              {{
+                profile.jdTextOverflow
+                  ? '粘贴的原文超过 6000 字，这次不带（回「岗位分析」页精简一下）'
+                  : `并带上你粘贴的招聘要求原文（${profile.jdTextLength} 字）`
+              }}
+            </span>
           </div>
 
           <!-- 二次确认 -->
           <div v-if="confirming" class="notice notice-warn sub-block">
             <strong>确认生成下一轮？</strong>
             <div class="notice-body">
-              将把 <strong>{{ pendingEvents.length }} 条</strong>待处理成果交给成长节点，
-              并重新生成学习与项目计划。该操作会修改 <span class="mono">runs/growth.json</span> 与
-              <span class="mono">runs/loop.json</span>。
+              将把 <strong>{{ pendingEvents.length }} 条</strong>待处理成果正式记账，
+              并重新生成学习与项目计划。这一步会同时改写成长历史和任务清单。
             </div>
             <div class="btn-row">
               <button class="btn" @click="confirming = false">取消</button>
@@ -491,7 +499,7 @@ async function submitManualEvent() {
         <div class="card-head">
           <h2>
             成长历史
-            <span class="sub">真正落盘到 runs/growth.json 的记录</span>
+            <span class="sub">已经正式记下来的历史</span>
           </h2>
           <div class="btn-row">
             <AppBadge
@@ -566,7 +574,13 @@ async function submitManualEvent() {
 
             <dl v-if="baseline" class="kv kv--mid sub-block">
               <dt>能力基线来源</dt>
-              <dd>{{ baseline.source || '（未记录）' }}</dd>
+              <dd>
+                {{
+                  baseline.source === 'user_profile'
+                    ? '首次分析时填的个人画像'
+                    : baseline.source || '（未记录）'
+                }}
+              </dd>
               <dt>基线建立时间</dt>
               <dd>{{ formatDateTime(baseline.at) }}</dd>
             </dl>

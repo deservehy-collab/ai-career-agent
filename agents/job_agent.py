@@ -3,7 +3,7 @@
 证据驱动（阶段二）
 ------------------
 除 ``target_job`` 外，本节点还读取 Retrieval Agent 写入的 ``job_evidence`` 与
-``retrieval_status``，把真实检索证据作为**事实来源**注入提示词，并为每条岗位
+``retrieval_status``，把原文依据作为**事实来源**注入提示词，并为每条岗位
 要求标注来源：
 
 - ``evidence_status``  supported / partially_supported / model_supplement
@@ -28,9 +28,22 @@
 
 降级
 ----
-没有索引、没有匹配证据或检索报错时，``job_evidence`` 为空 —— 岗位要求照常生成，
+没有粘贴原文、或原文一句都没切出来时，``job_evidence`` 为空 —— 岗位要求照常生成，
 但每条都标记为 ``model_supplement`` + ``importance_basis = "model_generated"``，
 系统本身可判定"这条没有 JD 依据"，不再只靠终端提示。
+
+用户自带原文（``provenance == "user_pasted"`` 的证据）
+-----------------------------------------------------
+用户当场粘贴招聘要求时，``retrieval_agent`` 会把原文逐句切成证据送进来（见
+``agents/user_jd``）。这些句子与内置资料走**同一套**归属与等级判定，只有两点不同：
+
+- 多一层字面兜底（``_skill_appears_in``）：技能名在原话里逐字出现就判 ``supported``，
+  不依赖模型是否老实填 ``evidence_refs``；
+- 条数下限放宽到 1：一份广告本来就只写了两条要求是常态，不该为凑数把原文没提的
+  能力编进来，也不该因此让整次分析失败。
+
+每条要求都带 ``source_notes``（支撑它的原文句子），前端据此做逐条反显 ——
+用户能不能一眼看出"这条是广告里写的"还是"模型自己加的"，全靠这个字段。
 """
 
 import re
@@ -39,7 +52,8 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from agents.llm import structured_invoke
-from agents.retriever import SkillVocabulary
+from agents.skill_dict import SkillVocabulary
+from agents.user_jd import USER_JD_PROVENANCE
 from agents.utils import (
     SKILL_LEVELS,
     check_non_empty,
@@ -87,8 +101,9 @@ _JD_LEVEL_WORDS = (
 PROMPT = """你是一名资深招聘专家，长期负责「{job}」岗位的招聘与用人标准制定。
 请分析这个岗位，拆解出它真正要求的核心技能。
 
-【岗位知识库检索证据】
+【岗位依据材料】
 {evidence_block}
+{basis_note}
 
 【岗位定位】先判断岗位所属领域，再按**该领域的真实用人标准**拆解：
 - 如果是"大模型 / AI 应用开发"类岗位：它是把大模型能力落地成产品的**工程岗**，
@@ -124,11 +139,22 @@ PROMPT = """你是一名资深招聘专家，长期负责「{job}」岗位的招
    不要把每项都写成 5，最多 2 项可以是 5。
 6. level 是该岗位对这项技能的推荐能力等级（入门/初级/中级/高级）。
 7. reason 用一句话说明这项技能在岗位里具体用来做什么。
-8. evidence_refs 只能填上面【岗位知识库检索证据】里出现过的编号（如 E01、E02），
+8. evidence_refs 只能填上面【岗位依据材料】里出现过的编号（如 E01、E02），
    可以填多个；名称和证据里的技能不一样、但语义相关的也可以引用。
    确实找不到能支撑该项的证据时，填 ["无"]。
    **不得编造编号、公司名或原文**；上面没有证据时，所有项都填 ["无"]。
 9. 全部用中文，技能名称保留英文原文（如 Python、FastAPI、Docker）。"""
+
+# 用户自带原文时的附加规矩。放在【岗位依据材料】后面，**覆盖**下面【岗位定位】
+# 那套 AI 岗分类清单 —— 用户粘的是新媒体运营时，还硬要凑齐"RAG 检索增强"
+# 这类条目，就是拿内置资料的口味冒充人家的岗位要求。
+_USER_JD_NOTE = """【本次的规矩】
+上面【用户提供的招聘要求原文】就是用户手头这个岗位的**原话**，是本次唯一的事实依据：
+- 岗位要求**只能**从这些原话里得出。原文没提的能力一律不要列，哪怕你认为这类岗位
+  通常应当要求它（这种"通常应当"请一律不要写进来）。
+- 每一项都必须用 evidence_refs 引用支撑它的编号；找不到支撑原话的，就不要列这一项。
+- 下面【岗位定位】里那份分类清单**本次不适用**，按原文里实际出现的说法来拆。
+- 重要性 importance 按原话的措辞强弱判断：写着"必须/精通/熟练"的比"优先/加分/了解"的高。"""
 
 
 class JobRequirement(BaseModel):
@@ -191,6 +217,22 @@ def get_vocabulary() -> SkillVocabulary | None:
 # ── 纯函数工具 ──────────────────────────────────────────────────────────
 def _normalize_skill_name(name) -> str:
     return str(name or "").strip().lower().replace(" ", "")
+
+
+def _skill_appears_in(skill_name, sentence: str) -> bool:
+    """技能名是否在这句原文里逐字出现（忽略大小写与空格）。
+
+    只认字面出现，不做语义联想 —— 这一层的全部价值就是"程序能自己确认"，
+    一旦开始猜，它跟模型引用就没区别了。含 "/" 的名称拆开各算（"LangChain/LangGraph"）。
+    """
+    name = _normalize_skill_name(skill_name)
+    if not name:
+        return False
+    haystack = _normalize_skill_name(sentence)
+    variants = {name} | {
+        _normalize_skill_name(part) for part in str(skill_name or "").split("/") if part.strip()
+    }
+    return any(variant and variant in haystack for variant in variants)
 
 
 def evidence_ref(index: int) -> str:
@@ -293,22 +335,46 @@ def dedupe_by_canonical(requirements: list, merged: list) -> list:
 
 
 def format_evidence_block(evidence: list, retrieval_status: str | None) -> str:
-    """把检索证据整理成提示词里的一段。编号由程序给出，模型只能引用这些编号。"""
+    """把证据整理成提示词里的一段。编号由程序给出，模型只能引用这些编号。
+
+    两种来源分开呈现，因为它们的可信度与用途完全不同：用户当场粘贴的原文是
+    **这个岗位本身的说法**，内置知识库是**同类岗位的整理稿**。混在一起，
+    模型分不清哪句能当事实。
+    """
     if not evidence:
         return (
             f"（本轮岗位知识库检索状态：{retrieval_status or '未提供'}，没有可用证据。"
             "所有 evidence_refs 一律填 [\"无\"]，岗位要求按你自己的判断拆解。）"
         )
-    lines = []
+
+    user_lines: list[str] = []
+    kb_lines: list[str] = []
     for index, item in enumerate(evidence):
-        lines.append(
-            f"{evidence_ref(index)}｜公司：{item.get('company_slug') or '未标注'}"
-            f"｜技能：{item.get('skill')}"
-            f"｜要求性质：{item.get('requirement_type')}"
-            f"｜章节：{item.get('context')}"
-            f"｜原文：{item.get('note')}"
+        ref = evidence_ref(index)
+        if item.get("provenance") == USER_JD_PROVENANCE:
+            user_lines.append(f"{ref}｜原文：{item.get('note')}")
+        else:
+            kb_lines.append(
+                f"{ref}｜公司：{item.get('company_slug') or '未标注'}"
+                f"｜技能：{item.get('skill')}"
+                f"｜要求性质：{item.get('requirement_type')}"
+                f"｜章节：{item.get('context')}"
+                f"｜原文：{item.get('note')}"
+            )
+
+    parts: list[str] = []
+    if user_lines:
+        parts.append(
+            "【用户提供的招聘要求原文】以下每一条都是该岗位招聘广告里的原话，逐字摘自原文。\n"
+            "本次分析**只以这些原话为事实依据**：不要引入原文里没提到的技能，"
+            "也不要用下面内置知识库的条目顶替。\n" + "\n".join(user_lines)
         )
-    return "\n".join(lines)
+    if kb_lines:
+        parts.append(
+            "【内置岗位知识库证据】来自同类岗位的历史整理，仅供参考。\n"
+            + "\n".join(kb_lines)
+        )
+    return "\n\n".join(parts)
 
 
 def _attach_evidence(requirement: dict, evidence: list, rejected: list) -> dict:
@@ -336,12 +402,31 @@ def _attach_evidence(requirement: dict, evidence: list, rejected: list) -> dict:
         else []
     )
 
+    # 2.5) 用户原文这一路的兜底规则：技能名在这句原话里**逐字出现**就直接归属。
+    # 小模型经常不按要求填 evidence_refs，若只信它的引用，一份写得明明白白的原文
+    # 会被整体标成"无依据"、匹配度归零 —— 模型偷懒的代价不该由用户承担。
+    text_indexes = [
+        i
+        for i, item in enumerate(evidence)
+        if item.get("provenance") == USER_JD_PROVENANCE
+        and _skill_appears_in(requirement.get("skill"), str(item.get("note") or ""))
+    ]
+
+    # 用户原文这一路**不收模型自报的编号**。实测：3B 模型会把"Python"这种它自己
+    # 想到的技能挂到压根没提它的句子上，还给出 E01/E06 这种合法但无关的编号 ——
+    # 而"每条要求都能反查到原话"正是这一路存在的理由，宁可少认一条也不能认错。
+    from_user_jd = any(item.get("provenance") == USER_JD_PROVENANCE for item in evidence)
+
     # 规则层能定就完全用规则层的（模型那几条是冗余的）；否则才用模型引用
     if rule_indexes:
         indexes = rule_indexes
         exact_name = _normalize_skill_name(requirement.get("skill")) == _normalize_skill_name(canonical)
         status = "supported" if exact_name else "partially_supported"
-    elif model_indexes:
+    elif text_indexes:
+        # 原话里逐字写着这个技能 —— 这是能有的最强依据
+        indexes = text_indexes
+        status = "supported"
+    elif model_indexes and not from_user_jd:
         indexes = model_indexes
         status = "partially_supported"
     else:
@@ -354,6 +439,7 @@ def _attach_evidence(requirement: dict, evidence: list, rejected: list) -> dict:
             "evidence_status": "model_supplement",
             "evidence_refs": [],
             "source_companies": [],
+            "source_notes": [],
             "importance_basis": "model_generated",
             "level_basis": {"origin": "model_inferred", "quote": None, "by_company": {}},
         }
@@ -405,6 +491,9 @@ def _attach_evidence(requirement: dict, evidence: list, rejected: list) -> dict:
         "source_companies": sorted(
             {item.get("company_slug") for item in picked if item.get("company_slug")}
         ),
+        # 支撑本条要求的**原文句子**。前端逐条反显靠它 —— 用户要能一眼看出
+        # 这条要求是从广告里哪句话来的，还是模型自己加的。
+        "source_notes": [item.get("note") for item in picked if item.get("note")],
         "importance_basis": importance_basis,
         "level_basis": level_basis,
     }
@@ -423,9 +512,15 @@ def job_node(state: CareerState) -> dict:
     evidence = list(state.get("job_evidence") or [])
     retrieval_status = state.get("retrieval_status")
 
+    # 用户自带原文时，岗位要求只能从原文来；此时一份广告本来就只写了 2 条要求
+    # 是可能的，不该为了凑够 3 条把没提的能力编进来，更不该因此让整次分析崩掉。
+    from_user_jd = any(item.get("provenance") == USER_JD_PROVENANCE for item in evidence)
+    requirement_floor = 1 if from_user_jd else MIN_REQUIREMENTS
+
     prompt = PROMPT.format(
         job=target_job,
         evidence_block=format_evidence_block(evidence, retrieval_status),
+        basis_note=_USER_JD_NOTE if from_user_jd else "",
     )
     analysis = structured_invoke(prompt, JobAnalysis)
 
@@ -465,7 +560,7 @@ def job_node(state: CareerState) -> dict:
             flush=True,
         )
 
-    check_non_empty(requirements, "Job Agent 的岗位技能列表", minimum=MIN_REQUIREMENTS)
+    check_non_empty(requirements, "Job Agent 的岗位技能列表", minimum=requirement_floor)
 
     # 回填证据来源（会覆盖 importance / level，所以必须排在排序之前）
     rejected: list[str] = []

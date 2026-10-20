@@ -7,6 +7,9 @@
  *
  * ⚠️ 分析不再走只读 /api/analyze，而是走 /api/analyze-and-save：
  * 首次分析会顺手把产出的学习/项目计划存成第 1 轮任务（根治冷启动死锁）。
+ * 因此 `result` 是**带包装的**：分析结果在 `result.analysis` 里，外层是 round_created /
+ * warning 这些建轮次元信息。本 store 对外暴露的 `result` 已解包成投影结果本身，
+ * 视图层按扁平字段读即可（见 applySuccess）。
  *
  * ⚠️ 绝不传 growth_events
  * ---------------------------------------
@@ -24,6 +27,7 @@ import { defineStore } from 'pinia'
 import { ApiError } from '../api/client'
 import { getRun, startAnalyzeAndSave } from '../api/endpoints'
 import { pollRun, RUN_STATUS } from '../composables/useRunPolling'
+import { formatRunError } from '../utils/format'
 import { useProfileStore } from './profile'
 
 /** 界面用的状态机：idle 之外都直接映射后端四态。 */
@@ -44,11 +48,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
   const startedAt = ref(null)
   const finishedAt = ref(null)
 
-  // 本次分析的目标，用于结果区标题
+  // 本次分析的目标岗位，用于结果区标题
   const targetJob = ref('')
-  const targetCompany = ref(null)
-  const jdSourceId = ref(null)
-  const jdLabel = ref('跨公司概览')
 
   let controller = null
 
@@ -60,8 +61,18 @@ export const useAnalysisStore = defineStore('analysis', () => {
 
   /** 后端汇总方案（final_plan 由 build_final_plan 现算）。 */
   const finalPlan = computed(() => result.value?.final_plan ?? null)
-  /** 阶段四的真实 JD 匹配结论。 */
+  /** 岗位匹配结论（build_final_plan 里的 jd_match）。 */
   const jdMatch = computed(() => finalPlan.value?.jd_match ?? null)
+  /**
+   * 本次岗位要求的主依据：user_pasted | model_only（backend/analyze.py）。
+   * 旧结果里没有这个键时按"有没有粘原文"推断，不让界面因为缺字段显示"-"。
+   */
+  const requirementBasis = computed(() => {
+    const raw = result.value?.requirement_basis
+    if (raw) return raw
+    return result.value?.user_jd_provided ? 'user_pasted' : 'model_only'
+  })
+
 
   /** 事后查询一次运行记录（不轮询），用于"稍后再查"。 */
   async function fetchOnce(id = runId.value) {
@@ -75,14 +86,20 @@ export const useAnalysisStore = defineStore('analysis', () => {
 
   function applySuccess(record) {
     status.value = ANALYSIS_STATUS.SUCCEEDED
-    result.value = record.result ?? null
+    // /api/analyze-and-save 把只读分析结果**包在 analysis 里**，外层是建轮次的元信息
+    // （round_created / round_no / warning）；只读的 /api/analyze 则直接返回投影结果。
+    // 这里必须解包，否则 user_skills / job_requirements / skill_gaps / job_evidence /
+    // retrieval_status / growth_diff / final_plan 全都会读成 undefined —— 外层只有
+    // learning_plan 与 project_plan 两个副本，所以现象是"学习和项目有、其他全空"。
+    const raw = record.result ?? null
+    result.value = raw?.analysis ?? raw
     finishedAt.value = record.finished_at || new Date().toISOString()
     errorMessage.value = ''
     errorKind.value = null
 
     // 保存结构化能力表，供后续"提交任务完成"当 profile_skills 用。
     const profileStore = useProfileStore()
-    const skills = record.result?.user_skills
+    const skills = result.value?.user_skills
     if (Array.isArray(skills) && skills.length) {
       profileStore.setLastSkills(skills, finishedAt.value)
     }
@@ -92,8 +109,9 @@ export const useAnalysisStore = defineStore('analysis', () => {
     status.value = ANALYSIS_STATUS.FAILED
     result.value = null
     finishedAt.value = record.finished_at || new Date().toISOString()
-    // 后端把异常消息放在 error 字段（backend/jobs.py 的 TaskRecord）
-    errorMessage.value = record.error || '分析任务失败，但后端未给出错误信息。'
+    // 后端把异常消息放在 error 字段（backend/jobs.py 的 TaskRecord），格式是
+    // "ValueError: 具体原因"；类名不给使用者看（见 utils/format.js 的 formatRunError）
+    errorMessage.value = formatRunError(record.error, '分析任务失败，但后端未给出错误信息。')
     errorKind.value = 'run_failed'
   }
 
@@ -119,13 +137,11 @@ export const useAnalysisStore = defineStore('analysis', () => {
    * 发起分析并轮询到终态。
    *
    * @param {object} params
-   * @param {object} params.profile        → UserProfileRequest 四字段
-   * @param {string} params.targetJob      → AnalyzeRequest.target_job（必填）
-   * @param {string|null} [params.targetCompany]
-   * @param {string|null} [params.jdSourceId]
-   * @param {string} [params.jdLabel]      界面展示用的目标名
+   * @param {object} params.profile    → UserProfileRequest 四字段
+   * @param {string} params.targetJob  → AnalyzeRequest.target_job（必填）
+   * @param {string} [params.jdText]   → AnalyzeRequest.jd_text：用户粘贴的招聘要求原文
    */
-  async function start({ profile, targetJob: job, targetCompany: company = null, jdSourceId: sourceId = null, jdLabel: label = '跨公司概览' }) {
+  async function start({ profile, targetJob: job, jdText: pastedJd = '' }) {
     cancel()
 
     runId.value = null
@@ -136,10 +152,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
     startedAt.value = new Date().toISOString()
     finishedAt.value = null
     targetJob.value = job
-    // 二者同时传时后端会校验归属一致；这里只做原样透传，不代替后端判定。
-    targetCompany.value = sourceId ? null : company || null
-    jdSourceId.value = sourceId || null
-    jdLabel.value = label
+
+    const pasted = String(pastedJd || '').trim()
 
     controller = new AbortController()
     const { signal } = controller
@@ -149,8 +163,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
       target_job: job,
       // 不传 growth_events（见文件头说明）
     }
-    if (targetCompany.value) body.target_company = targetCompany.value
-    if (jdSourceId.value) body.jd_source_id = jdSourceId.value
+    if (pasted) body.jd_text = pasted
 
     try {
       const accepted = await startAnalyzeAndSave(body)
@@ -201,7 +214,6 @@ export const useAnalysisStore = defineStore('analysis', () => {
     errorKind.value = null
     startedAt.value = null
     finishedAt.value = null
-    jdLabel.value = '跨公司概览'
   }
 
   return {
@@ -213,14 +225,12 @@ export const useAnalysisStore = defineStore('analysis', () => {
     startedAt,
     finishedAt,
     targetJob,
-    targetCompany,
-    jdSourceId,
-    jdLabel,
     isRunning,
     hasResult,
     lastError,
     finalPlan,
     jdMatch,
+    requirementBasis,
     start,
     cancel,
     reset,

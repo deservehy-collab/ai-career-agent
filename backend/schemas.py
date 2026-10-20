@@ -60,8 +60,12 @@ class AnalyzeRequest(BaseModel):
     """``POST /api/analyze`` 的请求体。
 
     对应 ``workflow.invoke`` 的输入：画像 + 目标岗位 + 可选成长事件。
-    阶段四的可选入口目标（``target_company`` / ``jd_source_id``）只在传了值时才
-    写进 state —— 不传时保持阶段二以来「跨公司概览」的默认行为，逐字段不变。
+
+    ``jd_text``
+    -----------
+    用户**当场粘贴**的招聘要求原文。传了它，岗位要求就以这段原文为唯一依据
+    （见 ``agents.user_jd``），每条要求都能反查到原话的第几句。不传时岗位要求
+    全是模型推断，前端会如实标灰并**不给**匹配度百分比。
     """
 
     user_profile: UserProfileRequest
@@ -73,8 +77,11 @@ class AnalyzeRequest(BaseModel):
         max_length=config.GROWTH_EVENTS_MAX_ITEMS,
         description="本轮新完成的学习/项目成果；直接透传给 growth_node，由业务层校验",
     )
-    target_company: str | None = Field(default=None, description="限定公司（可选）")
-    jd_source_id: str | None = Field(default=None, description="精确匹配某份真实 JD（可选，优先级最高）")
+    jd_text: str | None = Field(
+        default=None,
+        max_length=config.JD_TEXT_MAX_CHARS,
+        description="用户粘贴的招聘要求原文，本次岗位要求的唯一依据",
+    )
 
     def to_state(self) -> dict:
         """转成 ``CareerState`` 的输入子集。"""
@@ -83,10 +90,8 @@ class AnalyzeRequest(BaseModel):
             "target_job": self.target_job,
             "growth_events": [dict(item) for item in self.growth_events],
         }
-        if self.target_company:
-            state["target_company"] = self.target_company
-        if self.jd_source_id:
-            state["jd_source_id"] = self.jd_source_id
+        if self.jd_text and self.jd_text.strip():
+            state["jd_text"] = self.jd_text.strip()
         return state
 
 
@@ -104,6 +109,20 @@ class CompleteTaskRequest(BaseModel):
     )
 
 
+class ClearTasksRequest(BaseModel):
+    """``POST /api/tasks/clear`` 的请求体（整体可选）。
+
+    ``drop_pending_events`` 默认 False：清单里如果有**还没进成长历史**的打卡成果，
+    服务层会拒绝清空并回 ``needs_confirmation``，前端必须让用户确认后才带着
+    ``true`` 重试 —— 那些成果是真实进度，不能在一次"清理界面"里被顺手冲掉。
+    """
+
+    drop_pending_events: bool = Field(
+        default=False,
+        description="确认连同尚未记进成长历史的打卡成果一起删除",
+    )
+
+
 class NextRoundRequest(BaseModel):
     """``POST /api/growth/next-round`` 的请求体（整体可选）。
 
@@ -115,6 +134,11 @@ class NextRoundRequest(BaseModel):
 
     user_profile: UserProfileRequest | None = None
     target_job: str | None = Field(default=None, max_length=config.TARGET_JOB_MAX_CHARS)
+    jd_text: str | None = Field(
+        default=None,
+        max_length=config.JD_TEXT_MAX_CHARS,
+        description="沿用上一轮的招聘要求原文；不传则这一轮没有原文依据",
+    )
 
 
 class ManualGrowthEventRequest(BaseModel):

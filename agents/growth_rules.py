@@ -1,6 +1,6 @@
 """阶段五：动态能力成长的**纯规则**模块。
 
-本模块只做确定性判定：不调模型、不读磁盘、不写 state、不碰 Chroma。
+本模块只做确定性判定：不调模型、不读磁盘、不写 state。
 所有外部依赖（技能词表、技能知识库）一律**从参数注入**，便于用内存替身做单元测试。
 
 分工（与阶段三、四一致）
@@ -19,7 +19,8 @@ R3 上限只由**成果类型**决定（learning → 初级，project → 中级
 R4 技能库**已收录**的技能执行严格前置门禁：前置缺失或等级无法确认 → 记入 blocked_upgrades。
 R5 技能库**未收录**的技能跳过前置门禁，其余规则照旧，并标注"未收录等级标准"。
 R6 复用 ``_LEVEL_RANK`` / ``_ABSENT_LEVELS`` / 技能名归一函数，不另立常量。
-R7 指纹 = sha256(type \\x1f title \\x1f 排序后的规范技能名) 取前 12 位，**不含时间戳**。
+R7 指纹 = sha256(type \x1f title \x1f 排序后的技能键) 取前 12 位，**不含时间戳**。
+   技能键 = 规范技能名，或词表没收录时的原名（见 :func:`normalize_skills`）。
 R8 缺口变化按**规范技能名**配对，禁止按下标 zip；兼容新增、消失、状态变化。
 R9 非法事件显式记录并跳过；**非法 type 不默认成 learning**。
 """
@@ -31,7 +32,7 @@ import hashlib
 from agents.assessment_agent import _LEVEL_RANK, _norm_name
 from agents.project_agent import SATISFIED_STATUS
 from agents.project_knowledge import _ABSENT_LEVELS
-from agents.utils import SKILL_LEVELS, build_skill_mapping, resolve_canonical
+from agents.utils import SKILL_LEVELS, canonical_matches, resolve_canonical
 
 # ── 成果类型 ────────────────────────────────────────────────────────────
 EVENT_LEARNING = "learning"
@@ -116,12 +117,45 @@ def pair_key(name, vocabulary=None) -> str:
 
 
 def normalize_skills(names, vocabulary=None) -> tuple[list[str], list[str]]:
-    """把技能名列表归一到规范技能名（保序去重）。
+    """把技能名列表归一成成长记账用的技能键（保序去重）。
 
-    返回 ``(canonical, unmapped)``：归一不了的**显式返回**，不猜、不替换。
+    返回 ``(canonical, unmapped)``。三种写法三种下场，**任何一种都不猜**：
+
+    - **唯一命中词表** → 用规范技能名；
+    - **一个词表技能都没沾上** → 按原名建键，照常参与记账，同时列入 ``unmapped``。
+      词表只收录「AI 应用工程师」那十几项技能，电气、护理这类岗位的缺口名
+      天然不在表里；把它们丢掉会让这些用户的每一条成果都判成"没关联技能"，
+      成长记录永远写不进去。技能知识库查不到某项技能时按 R5 跳过门禁、照常升档
+      （见 :func:`resolve_gate`），所以保留原名**不会**绕过任何校验。
+      纯数字除外 —— 那是模型抄的缺口编号，不是技能名，不给它记一档；
+    - **沾上两个以上**（歧义，如"大模型调用与提示词工程"）→ **丢弃**，只进
+      ``unmapped``。这条红线不动：按原始写法升级等于放行一个我们认不准的技能。
+
+    ``vocabulary`` 为 None（词表加载失败）时全部按"未能归一"处理，与以往一致。
     """
-    mapping, unmapped = build_skill_mapping(names, vocabulary)
-    canonical = list(dict.fromkeys(mapping.values()))
+    canonical: list[str] = []
+    unmapped: list[str] = []
+    for raw in names or []:
+        name = str(raw or "").strip()
+        if not name or name in unmapped:
+            continue
+        if vocabulary is None:
+            unmapped.append(name)        # 词表拿不到：不放宽，全部如实列进未识别清单
+            continue
+        matches = canonical_matches(name, vocabulary)
+        if len(matches) == 1:
+            key = matches[0]
+        elif matches:
+            unmapped.append(name)       # 歧义：认不准就不记账
+            continue
+        else:
+            if name.isdigit():
+                unmapped.append(name)   # 纯数字是缺口编号，不是技能名，不给它记一档
+                continue
+            key = pair_key(name)        # 词表没收录：按原名记账，并如实报告
+            unmapped.append(name)
+        if key and key not in canonical:
+            canonical.append(key)
     return canonical, unmapped
 
 
@@ -381,10 +415,11 @@ def plan_upgrades(
         if missed:
             unmapped.append({"index": index, "title": cleaned["title"], "skills": missed})
         if not canonical:
-            # 归一后一个都不剩 —— 不能凭原始写法升级，否则等于放行了不该认的技能
+            # 走到这里只剩两种可能：技能名全部**有歧义**（沾上了两个以上规范技能），
+            # 或成果本来就没带技能。前者不能凭原始写法升级，否则等于放行认错的技能。
             invalid.append({
                 "index": index,
-                "reason": f"技能名全部无法归一到规范技能名：{missed}",
+                "reason": f"技能名全部有歧义、无法确定对应哪个规范技能：{missed}",
                 "event": cleaned["title"],
             })
             continue

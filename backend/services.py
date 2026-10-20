@@ -10,7 +10,6 @@
 下一轮成长规划                                ``pending_growth_events`` + ``graph.workflow.workflow``
 任务 / 轮次查询                               ``agents.loop_store.LoopStore``
 成长历史查询                                  ``agents.growth_store.GrowthStore``
-真实 JD 元信息                                ``agents.jd_match.load_jd_metadata``
 ============================================  ==========================================
 
 三条不可动摇的边界（对应 tests/ 里的四个 API 测试）：
@@ -24,7 +23,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import threading
 import urllib.error
 import urllib.request
@@ -32,7 +30,6 @@ from dataclasses import dataclass
 
 from agents.growth_loop import pending_growth_events, process_task_completion
 from agents.growth_store import GrowthStore
-from agents.jd_match import load_jd_metadata
 from agents.loop_store import (
     COMPLETE_ALREADY,
     COMPLETE_INVALID_TASK_ID,
@@ -58,7 +55,7 @@ from backend.analyze import jsonable, use_growth_store, workflow
 
 __all__ = [
     "Stores", "complete_task", "list_pending", "run_next_round", "list_tasks",
-    "growth_history", "list_jds", "health", "_run_next_round", "add_manual_event",
+    "growth_history", "health", "_run_next_round", "add_manual_event",
     "run_analyze_and_save",
 ]
 
@@ -159,6 +156,52 @@ def completion_http_status(result: dict) -> int:
     if status == COMPLETE_INVALID_TASK_ID:
         return 422
     return 200
+
+
+#: :func:`clear_tasks` 的三种结果：已清空 / 需要用户确认 / 存储拒绝。
+CLEAR_OK = "cleared"
+CLEAR_NEEDS_CONFIRM = "needs_confirmation"
+CLEAR_REFUSED = "refused"
+
+
+def clear_tasks(stores: Stores, drop_pending_events: bool = False) -> dict:
+    """清空**当前用户**的任务清单：先备份原文件，再重置成空。只动 ``loop.json``。
+
+    为什么先问一句"未记账成果怎么办"
+    --------------------------------
+    打卡攒下的成长成果是先躺在 ``loop.json`` 的完成记录里的，要等用户点
+    「生成下一轮」才正式进成长历史（见 :func:`agents.growth_loop.pending_growth_events`）。
+    直接清空会把这些**还没记账的成果**一起删掉 —— 那是真实进度，不该被一次
+    "把界面清干净"顺手冲掉。所以默认拒绝，只有前端带着明确确认才丢。
+
+    返回 ``{status, rounds_removed, tasks_removed, backup, pending_events, warning}``；
+    ``backup`` 是备份文件名，用户随时可以照着它把清单还原。
+    """
+    pending = pending_growth_events(loop_store=stores.loop, growth_store=stores.growth)
+    events = pending.get("events") or []
+
+    if events and not drop_pending_events:
+        return {
+            "status": CLEAR_NEEDS_CONFIRM,
+            "rounds_removed": 0,
+            "tasks_removed": 0,
+            "backup": None,
+            "pending_events": len(events),
+            "warning": "有成果还没进成长历史，清空会一起丢掉，需要明确确认",
+        }
+
+    with _STORE_WRITE_LOCK:
+        result = stores.loop.clear()
+
+    status = result.get("status")
+    return {
+        "status": CLEAR_OK if status == "written" else CLEAR_REFUSED,
+        "rounds_removed": result.get("rounds_removed", 0),
+        "tasks_removed": result.get("tasks_removed", 0),
+        "backup": result.get("backup"),
+        "pending_events": len(events) if drop_pending_events else 0,
+        "warning": result.get("warning"),
+    }
 
 
 # ── 手动补录成长成果（打破空系统死锁）────────────────────────────────────
@@ -333,6 +376,7 @@ def _run_next_round(
     stores: Stores,
     user_profile: dict | None = None,
     target_job: str | None = None,
+    jd_text: str | None = None,
 ) -> dict:
     """用最新能力与最新缺口生成下一轮计划，并**正式写入成长历史**。
 
@@ -381,6 +425,11 @@ def _run_next_round(
         "target_job": resolved_target,
         "growth_events": events,
     }
+    # 下一轮沿用上一轮那份招聘要求原文（由前端带回来）：不传时退回内置知识库，
+    # 与既有行为逐字一致。
+    pasted = str(jd_text or "").strip()
+    if pasted:
+        state["jd_text"] = pasted
 
     # 关键：把工作流内部的 growth_node 指向**注入的** store，
     # 否则它会写默认 runs/，注入就形同虚设。
@@ -436,9 +485,11 @@ def _run_next_round(
     }
 
 
-def run_next_round(stores: Stores, user_profile=None, target_job=None) -> dict:
+def run_next_round(stores: Stores, user_profile=None, target_job=None, jd_text=None) -> dict:
     """``_run_next_round`` 的可序列化包装（HTTP 层用这个）。"""
-    return jsonable(_run_next_round(stores, user_profile=user_profile, target_job=target_job))
+    return jsonable(
+        _run_next_round(stores, user_profile=user_profile, target_job=target_job, jd_text=jd_text)
+    )
 
 
 # ── 只读查询 ────────────────────────────────────────────────────────────
@@ -523,15 +574,6 @@ def growth_history(stores: Stores) -> dict:
     return jsonable(payload)
 
 
-def list_jds() -> dict:
-    """列出知识库里真实 JD 的元信息（供前端选择匹配目标）。**只读。**"""
-    metadata = load_jd_metadata()
-    return jsonable({
-        "count": len(metadata),
-        "jds": [metadata[key] for key in sorted(metadata)],
-    })
-
-
 # ── 系统状态 ────────────────────────────────────────────────────────────
 def _ollama_status(timeout: float = 2.0) -> dict:
     """探测 Ollama 是否可达，并列出已安装模型。不调模型、不生成内容。"""
@@ -542,8 +584,6 @@ def _ollama_status(timeout: float = 2.0) -> dict:
         "models": [],
         "chat_model": config.CHAT_MODEL,
         "chat_model_ready": False,
-        "embedding_model": config.EMBEDDING_MODEL,
-        "embedding_model_ready": False,
         "error": None,
     }
     try:
@@ -553,40 +593,7 @@ def _ollama_status(timeout: float = 2.0) -> dict:
         info["models"] = names
         info["ok"] = True
         info["chat_model_ready"] = any(n.split(":")[0] == config.CHAT_MODEL.split(":")[0] for n in names)
-        info["embedding_model_ready"] = any(
-            n.split(":")[0] == config.EMBEDDING_MODEL.split(":")[0] for n in names
-        )
     except (urllib.error.URLError, OSError, ValueError) as exc:
-        info["error"] = f"{type(exc).__name__}: {exc}"
-    return info
-
-
-def _index_status() -> dict:
-    """检查 Chroma 索引是否存在，并**只读**点一下向量数。
-
-    用 ``mode=ro`` 打开，绝不写索引；读不出来就如实报错，不算作"索引为空"。
-    """
-    path = config.CHROMA_INDEX_DIR / "chroma.sqlite3"
-    info = {
-        "ok": False,
-        "path": str(path),
-        "exists": path.exists(),
-        "collections": None,
-        "vectors": None,
-        "error": None,
-    }
-    if not path.exists():
-        return info
-    try:
-        con = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)
-        try:
-            cursor = con.cursor()
-            info["collections"] = cursor.execute("SELECT COUNT(*) FROM collections").fetchone()[0]
-            info["vectors"] = cursor.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
-            info["ok"] = True
-        finally:
-            con.close()
-    except sqlite3.Error as exc:
         info["error"] = f"{type(exc).__name__}: {exc}"
     return info
 
@@ -610,13 +617,13 @@ def _knowledge_status() -> dict:
 
 
 def health(stores: Stores) -> dict:
-    """系统状态：把四个外部依赖的可达性一次说清。**只读。**
+    """系统状态：把三类外部依赖的可达性一次说清。**只读。**
 
     任一依赖不可用只降低整体状态（``degraded``），不视为服务故障 ——
-    岗位知识库是**增强**而非必需（见 agents/retrieval_agent.py 的降级原则）。
+    技能/项目知识库是**增强**而非必需：读不到时分析照常跑，只是学习路线与项目
+    推荐会如实告警"无法归一为规范技能名"（见 agents/learning_agent.py）。
     """
     ollama = _ollama_status()
-    index = _index_status()
     knowledge = _knowledge_status()
 
     growth_loaded = stores.growth.load()
@@ -640,20 +647,18 @@ def health(stores: Stores) -> dict:
     }
 
     healthy = (
-        ollama["ok"] and ollama["chat_model_ready"] and ollama["embedding_model_ready"]
-        and index["ok"] and knowledge["skills"]["ok"] and knowledge["projects"]["ok"]
+        ollama["ok"] and ollama["chat_model_ready"]
+        and knowledge["skills"]["ok"] and knowledge["projects"]["ok"]
         and growth_loaded.writable and loop_loaded.writable
     )
 
     return jsonable({
         "status": "ok" if healthy else "degraded",
         "ollama": ollama,
-        "index": index,
         "knowledge": knowledge,
         "stores": stores_info,
         "config": {
             "chat_model": config.CHAT_MODEL,
-            "embedding_model": config.EMBEDDING_MODEL,
             "runs_dir": str(config.RUNS_DIR),
             "task_workers": config.TASK_WORKERS,
         },

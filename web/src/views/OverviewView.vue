@@ -9,7 +9,7 @@ import { AGENTS, AGENT_GROUP } from '../utils/agents'
  * 这页只回答使用者真正关心的三件事 —— 有什么能用、用来干什么、怎么用 ——
  * 然后把人送到对应页面去。因此：
  *
- * 1. **不展示任何运维数据**：不读 Ollama 状态、不数 JD / 向量 / 技能条数，
+ * 1. **不展示任何运维数据**：不读 Ollama 状态、不数技能或项目条数，
  *    也不放「我的当前进度」这类读数。那些属于「系统状态」页，不在这。
  *    整页纯静态、不发任何请求。
  * 2. **只链真实路由**：AI 助手 /assistant、岗位分析 /analyze、
@@ -31,7 +31,7 @@ const features = [
   {
     key: 'plan',
     title: '求职规划（岗位分析）',
-    desc: '填一份画像、选一个真实 JD 或一家公司，七个专职 Agent 顺序跑完，给出岗位要求、能力差距、学习路线与项目建议。',
+    desc: '填一份画像，再把招聘页的「任职要求」整段粘进来 —— 任何专业、任何岗位都能分析。七个专职 Agent 顺序跑完，给出岗位要求、能力差距、学习路线与项目建议。',
     to: '/analyze',
     cta: '发起规划',
     icon: 'M12 3v4 M12 17v4 M5 12h4 M15 12h4 M8 8l8 8 M16 8l-8 8',
@@ -55,7 +55,7 @@ const features = [
   {
     key: 'status',
     title: '系统状态',
-    desc: '想知道本机模型和岗位知识库是否就绪、或后端连不上时，来这里排查 —— 运维读数都在这一页。',
+    desc: '想知道本机模型是否就绪、或后端连不上时，来这里排查 —— 运维读数都在这一页。',
     to: '/status',
     cta: '查状态',
     icon: 'M12 3a9 9 0 100 18 9 9 0 000-18z M8 12h2l1.5 3.5L14 8.5 15.5 12H17',
@@ -65,16 +65,16 @@ const features = [
 // ── 怎么用：一条真实的上手顺序（编号即顺序，不是装饰）──────────────────
 const startSteps = [
   { step: 1, title: '先问 AI 助手', desc: '方向不明时先聊两句', to: '/assistant' },
-  { step: 2, title: '发起一次求职规划', desc: '填画像、选真实 JD，跑七节点', to: '/analyze' },
+  { step: 2, title: '发起一次求职规划', desc: '填画像、粘招聘要求原文', to: '/analyze' },
   { step: 3, title: '认领学习与项目任务', desc: '照着清单一条条推进', to: '/tasks' },
   { step: 4, title: '提交完成、推进下一轮', desc: '在成长记录里看等级变化', to: '/growth' },
 ]
 
 // ── 上手须知：真实约束与演示入口，纯说明、可点的地方给去处 ──────────────
 const notes = [
-  { text: '全程离线：推理与检索都走本机 Ollama，不连云端、不使用云端密钥。', link: { to: '/status', label: '查看本机状态' } },
-  { text: '一次求职规划要跑 7 次本机模型推理，通常几十秒到几分钟；期间可以切走，跑完再回来看结果。' },
-  { text: '个人画像只保存在这台浏览器、随请求提交，后端没有画像表 —— 换浏览器需要重填。', link: { to: '/analyze', label: '去填画像' } },
+  { text: '全程离线：所有推理都在这台电脑上完成，不连云端、不用任何密钥。', link: { to: '/status', label: '查看本机状态' } },
+  { text: '一次求职规划要依次跑七个步骤，通常几十秒到几分钟；期间可以切走，跑完再回来看结果。' },
+  { text: '个人画像只存在这台浏览器里，随每次分析临时提交，服务器不做留存 —— 换浏览器需要重填。', link: { to: '/analyze', label: '去填画像' } },
   { text: '分析结果只在当前浏览器会话里保留，刷新即清空；真正长期保存的是「成长记录」里的历史。', link: { to: '/growth', label: '去成长记录' } },
   { text: '想先零成本体验：用演示账号 demo / demo1234 登录即可（只读浏览这些页面够用）。' },
 ]
@@ -84,7 +84,7 @@ const notes = [
  * 而是同一条七节点工作流里的节点，所以写成结果页内的区块锚点，不伪装成入口。
  */
 const outputs = [
-  { key: 'req', label: '岗位要求与 RAG 证据', to: '/analyze', hash: '#card-requirements', where: '分析结果页' },
+  { key: 'req', label: '岗位要求与依据原文', to: '/analyze', hash: '#card-requirements', where: '分析结果页' },
   { key: 'gap', label: '能力差距', to: '/analyze', hash: '#card-gaps', where: '分析结果页' },
   { key: 'learning', label: '学习路线', to: '/analyze', hash: '#card-learning', where: '分析结果页' },
   { key: 'project', label: '项目推荐', to: '/analyze', hash: '#card-projects', where: '分析结果页' },
@@ -175,7 +175,7 @@ const legend = computed(() =>
     <section class="panel">
       <div class="panel-head">
         <h2>一条工作流，七个 Agent</h2>
-        <span class="panel-src">graph/workflow.py · ORDER</span>
+        <span class="panel-src">七个步骤依次执行</span>
       </div>
 
       <p class="loose-note muted">
@@ -192,7 +192,7 @@ const legend = computed(() =>
         >
           <div class="ov-station-no">
             <span>{{ agent.order }}</span>
-            <code>{{ agent.node }}</code>
+            <span class="ov-station-group">{{ agent.group.label }}</span>
           </div>
           <h3>{{ agent.displayName }}</h3>
         </article>
@@ -218,8 +218,8 @@ const legend = computed(() =>
       </div>
 
       <p class="faint block-note">
-        跑完后这些产出会出现在岗位分析结果页的对应区块；后端只提供整条链路的四个状态
-        （排队 / 运行中 / 成功 / 失败），所以过程中不做逐节点假进度。
+        跑完后这些产出会出现在岗位分析结果页的对应区块。整条链只有排队、进行中、完成、
+        失败四种状态，所以过程中不给每个步骤编假进度。
       </p>
     </section>
 

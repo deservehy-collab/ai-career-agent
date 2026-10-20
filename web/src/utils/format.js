@@ -66,3 +66,17 @@ export function formatBytes(bytes) {
   }
   return `${index === 0 ? value : value.toFixed(1)} ${units[index]}`
 }
+
+// 后端把失败原因存成 "ValueError: 具体原因"（backend/jobs.py 的 TaskRecord.error）
+const ERROR_CLASS_PREFIX = /^[A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception|Warning|Timeout):\s*/
+
+/**
+ * 后台任务的失败原因 → 给人看的一句话。
+ *
+ * 异常类名（`ValueError`、`RuntimeError`）对使用者毫无意义，只会让人以为看到了
+ * 别人的调试输出，所以削掉前缀只留后面那句中文原因；整条为空才用兜底文案。
+ */
+export function formatRunError(raw, fallback = '任务失败，但后端未给出错误信息。') {
+  const text = String(raw ?? '').trim().replace(ERROR_CLASS_PREFIX, '')
+  return text || fallback
+}

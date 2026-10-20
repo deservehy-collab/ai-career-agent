@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 
 import AgentPipeline from '../components/AgentPipeline.vue'
 import AgentTag from '../components/AgentTag.vue'
@@ -14,90 +14,62 @@ import RunProgressCard from '../components/RunProgressCard.vue'
 import SkillGapTable from '../components/SkillGapTable.vue'
 import SkillTable from '../components/SkillTable.vue'
 
-import { listJds } from '../api/endpoints'
 import { useAnalysisStore } from '../stores/analysis'
-import { useProfileStore } from '../stores/profile'
+import { JD_TEXT_LIMIT, useProfileStore } from '../stores/profile'
 import { summarizeWorkflow } from '../utils/agents'
-import { growthOutcomeText, growthOutcomeTone, levelTone } from '../utils/enums'
+import {
+  growthOutcomeText,
+  growthOutcomeTone,
+  levelTone,
+  requirementBasisText,
+} from '../utils/enums'
 import { joinList } from '../utils/format'
-
-// ── 分析目标 ──────────────────────────────────────────────────────────
-// 三种模式对应后端 AnalyzeRequest 的三种可选传参：
-//   overview → 都不传（阶段二以来的默认跨公司概览）
-//   company  → 传 target_company（公司级匹配）
-//   jd       → 传 jd_source_id（精确匹配某份真实 JD，优先级最高）
-const TARGET_MODES = [
-  { value: 'overview', label: '跨公司概览', hint: '不限定公司，按整个岗位知识库检索' },
-  { value: 'company', label: '指定公司', hint: '只检索该公司的 JD 证据' },
-  { value: 'jd', label: '指定真实 JD', hint: '精确匹配某一份 JD，匹配结论最具体' },
-]
 
 const profile = useProfileStore()
 const analysis = useAnalysisStore()
 
-const mode = ref('overview')
-const companySlug = ref('')
-const jdSourceId = ref('')
-
-const jds = ref([])
-const jdsError = ref('')
-const jdsLoading = ref(false)
-
-onMounted(async () => {
-  jdsLoading.value = true
-  try {
-    const payload = await listJds()
-    jds.value = Array.isArray(payload?.jds) ? payload.jds : []
-  } catch (error) {
-    jdsError.value = error?.message || '加载 JD 列表失败'
-  } finally {
-    jdsLoading.value = false
-  }
+/** 招聘要求原文：存在 profile store 里，跟着 localStorage 一起留住，下次不用重粘。 */
+const jdText = computed({
+  get: () => profile.jdText,
+  set: (value) => {
+    profile.jdText = value
+  },
 })
 
 onBeforeUnmount(() => analysis.cancel())
 
-/** JD 下拉的来源；按公司分组展示更易读。 */
-const jdOptions = computed(() =>
-  jds.value.map((jd) => ({
-    value: jd.source_id,
-    label: `${jd.company || jd.company_slug} · ${jd.job_name || jd.source_id}`,
-    jd,
-  })),
-)
-
-/** 公司下拉来自 JD 列表里去重后的公司 —— 保证传过去的公司名后端一定能解析。 */
-const companyOptions = computed(() => {
-  const seen = new Map()
-  for (const jd of jds.value) {
-    const slug = jd.company_slug
-    if (slug && !seen.has(slug)) seen.set(slug, jd.company || slug)
-  }
-  return [...seen.entries()].map(([value, label]) => ({ value, label }))
-})
-
-const selectedJd = computed(() => jds.value.find((jd) => jd.source_id === jdSourceId.value) || null)
-
-const targetLabel = computed(() => {
-  if (mode.value === 'jd') return selectedJd.value ? `JD ${selectedJd.value.source_id}` : '未选择 JD'
-  if (mode.value === 'company') return companySlug.value ? `公司 ${companySlug.value}` : '未选择公司'
-  return '跨公司概览'
-})
-
-const modeHint = computed(
-  () => TARGET_MODES.find((item) => item.value === mode.value)?.hint || '',
+const targetLabel = computed(() =>
+  profile.hasJdText ? '你粘贴的招聘要求' : '没粘原文（模型推断）',
 )
 
 /** 前端把能提前拦下的都拦掉，避免打到后端才报 422。 */
 const blockingReason = computed(() => {
   if (!profile.canAnalyze) return '请先填写「目标岗位」——后端要求非空。'
-  if (mode.value === 'jd' && !jdSourceId.value) return '请选择一份具体 JD。'
-  if (mode.value === 'company' && !companySlug.value) return '请选择一家公司。'
+  if (profile.jdTextOverflow) return '粘贴的原文超过 6000 字，请精简后再分析（太长模型也读不完）。'
   return ''
 })
 
 const result = computed(() => analysis.result)
 const finalPlan = computed(() => analysis.finalPlan)
+const requirementBasis = computed(() => analysis.requirementBasis)
+
+/** 依据横幅的色调 → notice 样式类（两档都有对应类，不做默认兜底）。 */
+const basisNoticeClass = computed(
+  () =>
+    ({
+      user_pasted: 'notice notice-ok',
+      model_only: 'notice notice-danger',
+    })[requirementBasis.value] || 'notice',
+)
+
+/** 横幅里那句"这算什么依据"的补充说明。 */
+const basisNote = computed(() => {
+  if (requirementBasis.value === 'user_pasted') {
+    return '岗位要求只从你粘贴的原话里得出，每条都能点开对照到具体句子。'
+  }
+  return '这次没有粘贴招聘要求原文，下面的岗位要求是模型凭自身常识给的 —— 只能当思路参考，别当门槛结论。'
+})
+
 
 /** 一旦开始跑或已有结果，就切到两栏工作区。 */
 const showWorkspace = computed(() => analysis.status !== 'idle' || !!result.value)
@@ -115,7 +87,6 @@ const summaryRows = computed(() => {
   const rows = []
   const job = plan.target_job || analysis.targetJob
   if (job) rows.push({ key: 'job', label: '目标岗位', value: job })
-  rows.push({ key: 'scope', label: '检索范围', value: analysis.jdLabel || '跨公司概览' })
   if (typeof plan.learning_stage_count === 'number') {
     rows.push({ key: 'stages', label: '学习阶段', value: `${plan.learning_stage_count} 个` })
   }
@@ -153,16 +124,11 @@ function handleSelectRef(code) {
 function handleStart() {
   if (blockingReason.value || analysis.isRunning) return
 
-  const targetCompany = mode.value === 'company' ? companySlug.value : null
-  const sourceId = mode.value === 'jd' ? jdSourceId.value : null
-
   activeEvidenceRef.value = ''
   analysis.start({
     profile: profile.toRequestProfile(),
     targetJob: profile.targetJob.trim(),
-    targetCompany,
-    jdSourceId: sourceId,
-    jdLabel: targetLabel.value,
+    jdText: jdText.value,
   })
 }
 
@@ -177,12 +143,15 @@ function handleReset() {
     <div class="page-head">
       <h1>岗位分析</h1>
       <p>
-        提交画像与目标岗位，由 7 个专职 Agent 顺序协作：
-        能力画像 → 成长追踪 → 岗位知识库检索（RAG）→ 岗位要求 → 能力差距 → 学习路线 → 实战项目。
+        把你的<strong>目标岗位</strong>和一份<strong>招聘要求原文</strong>交给系统，
+        由 7 个专职 Agent 顺序协作：能力画像 → 成长追踪 → 岗位依据整理 → 岗位要求 → 能力差距 → 学习路线 → 实战项目。
+      </p>
+      <p class="faint">
+        最省事的做法：在招聘 App 上看到心仪岗位，把「任职要求」整段复制粘贴到下面，任何专业、任何岗位都能分析。
       </p>
     </div>
 
-    <!-- 输入区：画像 + 检索范围同处一块沉底表面，白底控件浮在上面 -->
+    <!-- 输入区：画像 + 招聘要求原文同处一块沉底表面，白底控件浮在上面 -->
     <section class="panel">
       <ProfileForm />
 
@@ -193,59 +162,28 @@ function handleReset() {
         </div>
 
         <div class="field">
-          <span id="an-mode-label" class="field-label">检索范围</span>
-          <div class="mode-opts" role="radiogroup" aria-labelledby="an-mode-label">
-            <label
-              v-for="item in TARGET_MODES"
-              :key="item.value"
-              class="mode-opt"
-              :class="{ 'is-on': mode === item.value }"
-            >
-              <input v-model="mode" type="radio" name="an-mode" :value="item.value" />
-              {{ item.label }}
-            </label>
+          <label for="an-jd-text">
+            把招聘要求粘到这里
+            <span class="hint">去招聘页把「任职要求」整段复制过来就行，不用整理</span>
+          </label>
+          <textarea
+            id="an-jd-text"
+            v-model="jdText"
+            rows="7"
+            placeholder="例：&#10;1、本科及以上学历，新闻学、汉语言文学相关专业优先&#10;2、具备扎实的文案撰写能力，能独立完成公众号推文&#10;3、熟练使用 PS、剪映等图文与视频工具"
+          />
+          <div class="btn-row btn-row--tight">
+            <span class="faint field-count">{{ profile.jdTextLength }} / {{ JD_TEXT_LIMIT }} 字</span>
+            <button v-if="profile.hasJdText" class="btn btn-sm" @click="jdText = ''">
+              清空原文
+            </button>
           </div>
-          <p class="faint block-note">{{ modeHint }}</p>
-        </div>
-
-        <div v-if="mode === 'company'" class="field">
-          <label for="an-company">公司</label>
-          <select id="an-company" v-model="companySlug">
-            <option value="">请选择…</option>
-            <option v-for="option in companyOptions" :key="option.value" :value="option.value">
-              {{ option.label }}（{{ option.value }}）
-            </option>
-          </select>
-        </div>
-
-        <div v-if="mode === 'jd'" class="field">
-          <label for="an-jd">具体 JD</label>
-          <select id="an-jd" v-model="jdSourceId" :disabled="jdsLoading">
-            <option value="">{{ jdsLoading ? '加载中…' : '请选择…' }}</option>
-            <option v-for="option in jdOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-          <p v-if="jdsError" class="notice notice-danger block-note">
-            加载 JD 列表失败：{{ jdsError }}
-          </p>
-          <p v-else-if="!jdsLoading && !jds.length" class="faint block-note">
-            知识库里还没有真实 JD（knowledge/jd 为空）。
+          <p class="faint block-note">
+            这里粘的是<strong>招聘方对这个岗位的要求</strong>，不是你自己的简历。
+            粘了之后，本次岗位要求完全以这些原话为准，每条都能反查到你粘的哪一句；
+            <strong>不粘就没有任何原文依据</strong>，岗位要求全由模型推断，下面会整栏标灰并说明。
           </p>
         </div>
-
-        <dl v-if="selectedJd" class="kv kv--narrow notice notice-info">
-          <dt>岗位</dt>
-          <dd>{{ selectedJd.job_name || '—' }}</dd>
-          <dt>公司</dt>
-          <dd>{{ selectedJd.company || '—' }}</dd>
-          <dt>城市</dt>
-          <dd>{{ selectedJd.city || '—' }}</dd>
-          <dt>薪资</dt>
-          <dd>{{ selectedJd.salary || '—' }}</dd>
-          <dt>状态</dt>
-          <dd>{{ selectedJd.status || '—' }}</dd>
-        </dl>
 
         <div v-if="blockingReason" class="notice notice-warn">{{ blockingReason }}</div>
 
@@ -262,7 +200,7 @@ function handleReset() {
             清空结果
           </button>
           <span class="faint">
-            分析不写成长历史；但首次分析会把产出的学习 / 项目计划存成第 1 轮任务（runs/loop.json）。
+            分析不写成长历史；只有第一次分析会把给出的学习与项目任务存成第 1 轮清单。
           </span>
         </div>
       </section>
@@ -275,7 +213,6 @@ function handleReset() {
       <div>
         <RunProgressCard
           :status="analysis.status"
-          :run-id="analysis.runId"
           :started-at="analysis.startedAt"
           :finished-at="analysis.finishedAt"
           :error-message="analysis.errorMessage"
@@ -303,11 +240,17 @@ function handleReset() {
         </template>
 
         <template v-if="result">
+          <!-- 本次岗位要求的依据来源：两档，决定下面几栏能不能当真 -->
+          <div :class="basisNoticeClass" class="notice--tight">
+            <strong>{{ requirementBasisText(requirementBasis) }}</strong>
+            <p class="notice-body">{{ basisNote }}</p>
+          </div>
+
           <!-- 汇总：final_plan 由图后的确定性汇总得出，不属于任一 Agent 节点 -->
           <section class="panel">
             <div class="panel-head">
               <h2>结论摘要</h2>
-              <span class="panel-src">graph/workflow.py · build_final_plan（非 Agent 节点）</span>
+              <span class="panel-src">由七个步骤的结果汇总得出</span>
             </div>
 
             <dl v-if="summaryRows.length" class="ledger">
@@ -343,7 +286,7 @@ function handleReset() {
             </div>
           </section>
 
-          <JdMatchCard :match="analysis.jdMatch" />
+          <JdMatchCard :match="analysis.jdMatch" :basis="requirementBasis" />
 
           <div id="card-profile">
             <SkillTable
@@ -429,15 +372,15 @@ function handleReset() {
                   </div>
 
                   <p class="faint block-note">
-                    本页分析是<strong>只读</strong>的：不会写入成长历史（runs/growth.json）。
-                    成长记录的正式写入发生在「成长记录」页的「生成下一轮」操作中。
+                    本页分析是<strong>只读</strong>的：不会写入成长历史。
+                    正式记一次成长，是在「成长记录」页点「生成下一轮」的时候。
                   </p>
                 </template>
               </div>
             </section>
           </div>
 
-          <!-- RAG 证据：EvidencePanel 自带 id="card-evidence" -->
+          <!-- 依据面板：EvidencePanel 自带 id="card-evidence" -->
           <EvidencePanel
             :evidence="result.job_evidence ?? null"
             :status="result.retrieval_status || ''"
@@ -452,6 +395,7 @@ function handleReset() {
               :requirements="result.job_requirements || []"
               agent-node="job"
               :active-ref="activeEvidenceRef"
+              :basis="requirementBasis"
               @select-ref="handleSelectRef"
             />
           </div>

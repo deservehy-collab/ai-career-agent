@@ -2,8 +2,9 @@
 
 START → profile → growth → retrieval → job → assessment → learning → project → END
 
-- retrieval 节点只做岗位知识库检索，失败会降级为空证据，不影响后续节点。
-- growth 节点紧跟 profile：能力必须先按本轮成长事件更新完，后面的检索、岗位匹配、
+- retrieval 节点只把用户粘贴的招聘要求原文切成逐句依据；没粘原文时交出空证据并如实
+  说明，后续节点照常执行（岗位要求会被标成"模型推断"）。
+- growth 节点紧跟 profile：能力必须先按本轮成长事件更新完，后面的岗位依据整理、
   能力评估、学习与项目规划才会按**新能力**重算。没有成长事件时它不升级任何等级，
   能力表等于"合并历史后的基线"（历史为空时就是 profile 的原样输出）。
 """
@@ -14,13 +15,13 @@ from langgraph.graph import END, START, StateGraph
 
 from agents.assessment_agent import assessment_node
 from agents.growth_agent import compare_growth_gaps, growth_node
-from agents.jd_match import compute_jd_match, resolve_target
+from agents.jd_match import compute_jd_match
 from agents.job_agent import job_node
 from agents.learning_agent import learning_node
 from agents.profile_agent import profile_node
 from agents.project_agent import project_node
 from agents.retrieval_agent import retrieval_node
-from agents.retriever import SkillVocabulary
+from agents.skill_dict import SkillVocabulary
 from graph.state import CareerState
 
 # 节点名 → 处理函数
@@ -127,24 +128,11 @@ def build_final_plan(state: dict) -> dict:
     stages = state.get("learning_plan") or []
     projects = state.get("project_plan") or []
 
-    # 阶段四：真实 JD 定向匹配（确定性汇总，复用 job_evidence / skill_gaps）
-    jd_target = None
-    jd_meta = None
-    company_slug = None
-    try:
-        target = resolve_target(state.get("jd_source_id"), state.get("target_company"))
-        jd_target = target["source_id"]
-        jd_meta = target["jd_meta"]
-        company_slug = target["company_slug"]
-    except Exception as exc:  # 入口参数异常已在 retrieval_node 暴露；这里兜底不中断汇总
-        print(f"[Final Plan] 警告：真实 JD 匹配目标解析失败，按跨公司概览处理（{type(exc).__name__}: {exc}）", flush=True)
+    # 岗位匹配结论（确定性汇总，复用 job_evidence / skill_gaps）
     jd_match = compute_jd_match(
         skill_gaps=gaps,
         job_requirements=state.get("job_requirements") or [],
         evidence=state.get("job_evidence") or [],
-        jd_meta=jd_meta,
-        jd_target=jd_target,
-        company_slug=company_slug,
     )
 
     plan = {

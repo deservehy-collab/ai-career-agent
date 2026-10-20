@@ -361,6 +361,84 @@ class LoopStore:
             return self._failed(exc)
         return {"status": WRITE_OK, "path": str(self.path), "data": data}
 
+    def clear(self, now: datetime | None = None) -> dict:
+        """把本用户的闭环记录**先备份、再重置为空**。
+
+        这是本模块唯一会丢掉既有轮次的操作，所以三条不退让：
+
+        1. 先把原文件完整复制成 ``loop.json.cleared-<时间戳>``，复制不成功就一个字节都不动；
+        2. 损坏 / 读不到 / 版本不符的文件**拒绝**清空 —— 那种情况该走
+           :meth:`backup_corrupt`，不能拿"清空"把问题掩盖掉；
+        3. 只动 ``loop.json``。成长历史在 ``growth.json``，本模块从不读写它，
+           所以清空不碰技能等级与已确认的成果。
+
+        返回 ``{status, path, backup, rounds_removed, tasks_removed, warning}``；
+        ``status`` 不是 :data:`WRITE_OK` 时磁盘未改动。
+        """
+        loaded = self.load()
+        if loaded.status not in _SAFE_TO_WRITE:
+            return {
+                "status": WRITE_REFUSED,
+                "warning": loaded.warning,
+                "path": str(self.path),
+                "backup": None,
+                "rounds_removed": 0,
+                "tasks_removed": 0,
+            }
+
+        rounds = loaded.data.get("rounds") or []
+        task_count = sum(len(entry.get("tasks") or []) for entry in rounds)
+        if not rounds:
+            # 本来就没有轮次：不制造一个"备份了个空文件"的假动作。
+            return {
+                "status": WRITE_OK,
+                "warning": None,
+                "path": str(self.path),
+                "backup": None,
+                "rounds_removed": 0,
+                "tasks_removed": 0,
+            }
+
+        moment = now or datetime.now()
+        target = self.path.with_name(
+            f"{self.path.name}.cleared-{moment.strftime('%Y%m%dT%H%M%S')}"
+        )
+        try:
+            shutil.copy2(self.path, target)
+        except OSError as exc:
+            return {
+                "status": WRITE_FAILED,
+                "warning": f"备份失败，任务清单一个字节都没动（{type(exc).__name__}: {exc}）",
+                "path": str(self.path),
+                "backup": None,
+                "rounds_removed": 0,
+                "tasks_removed": 0,
+            }
+
+        data = _empty_data(self.user_id)
+        data["created_at"] = _stamp(moment)
+        data["updated_at"] = _stamp(moment)
+        try:
+            self._write(data)
+        except OSError as exc:
+            return {
+                "status": WRITE_FAILED,
+                "warning": f"原清单已备份到 {target.name}，但重建空记录失败，原文件未改动：{exc}",
+                "path": str(self.path),
+                "backup": str(target),
+                "rounds_removed": 0,
+                "tasks_removed": 0,
+            }
+
+        return {
+            "status": WRITE_OK,
+            "warning": None,
+            "path": str(self.path),
+            "backup": str(target),
+            "rounds_removed": len(rounds),
+            "tasks_removed": task_count,
+        }
+
     def append_round(
         self,
         target_job: str,

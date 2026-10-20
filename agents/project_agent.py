@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from agents.llm import structured_invoke
 from agents.project_knowledge import DIFFICULTY_RANK, ProjectKnowledgeBase
-from agents.retriever import SkillVocabulary
+from agents.skill_dict import SkillVocabulary
 from agents.utils import (
     SKILL_LEVELS,
     build_skill_mapping,

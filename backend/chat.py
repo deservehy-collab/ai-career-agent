@@ -20,7 +20,7 @@
 模型名与地址的唯一来源
 ----------------------
 - 模型：``agents.llm.MODEL_NAME``（全项目唯一定义，backend/config.py 也从这里导入），
-  聊天只用它，**不会误用嵌入模型** ``nomic-embed-text``。
+  聊天与流水线用的是同一个模型，不另立第二套。
 - 地址：环境变量 ``OLLAMA_HOST`` 优先（``ChatOllama`` 未传 base_url 时就是这个口径），
   否则退回 ``backend.config.OLLAMA_BASE_URL``。两处都指向同一个解析函数，不散落硬编码。
 
@@ -50,7 +50,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
-from agents.llm import MODEL_NAME
+from agents.llm import CONTEXT_TOKENS, MODEL_NAME
 from backend import config
 
 __all__ = ["router", "build_model_messages", "resolve_base_url"]
@@ -72,6 +72,9 @@ CHAT_MAX_HISTORY_ITEM_CHARS = 4000
 CHAT_MAX_HISTORY_SUBMITTED = 60
 #: 聊天温度：比流水线的 0.2 略高，问答更自然；不影响任何规划业务
 CHAT_TEMPERATURE = 0.4
+#: 单次回答的 token 上限。聊天答案不需要规划那么长，收紧到 800；
+#: 不设的话 Ollama 会无限生成并独占推理槽（见 agents/llm.py 的 MAX_OUTPUT_TOKENS）。
+CHAT_MAX_OUTPUT_TOKENS = 800
 #: 上游 Ollama 的 socket 超时（秒）。首次加载模型可能较慢，给足余量。
 CHAT_UPSTREAM_TIMEOUT = 180.0
 
@@ -230,14 +233,20 @@ def _sse(event: str, data: dict[str, Any]) -> str:
 def _stream_upstream(messages: list[dict[str, str]]) -> Iterator[str]:
     """把 Ollama 的 NDJSON 流转成前端约定的 SSE 事件。
 
-    ``with response`` 是关键：客户端断开 → 本生成器被 close → 上游连接立即关闭
-    → Ollama 停止推理。所以「停止生成」是真的停止，不是只藏掉了文字。
+    ``with response`` 会在上游连接关闭时通知 Ollama，但**这不构成可靠的停止手段**：
+    Ollama 0.34.4 实测在客户端断开后仍继续生成（日志里 n_gen 持续上涨，请求返回 500
+    而任务未终止），且它只有单个推理槽，一次失控生成会饿死之后的所有请求。
+    真正兜住这件事的是 ``num_predict`` —— 所以它必须留在这里。
     """
     payload = {
         "model": MODEL_NAME,
         "messages": messages,
         "stream": True,
-        "options": {"temperature": CHAT_TEMPERATURE},
+        "options": {
+            "temperature": CHAT_TEMPERATURE,
+            "num_predict": CHAT_MAX_OUTPUT_TOKENS,
+            "num_ctx": CONTEXT_TOKENS,
+        },
     }
     base_url = resolve_base_url()
     emitted = 0

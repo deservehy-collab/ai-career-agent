@@ -27,7 +27,6 @@ const KIND_LETTER = { learning: '学习', project: '项目' }
 <template>
   <article class="task-card" :class="{ 'is-done': task.status === 'completed' }">
     <header class="task-head">
-      <span class="mono faint">{{ task.task_id }}</span>
       <AppBadge :text="taskKindText(task.kind)" :tone="taskKindTone(task.kind)" />
       <AppBadge :text="taskStatusText(task.status)" :tone="taskStatusTone(task.status)" />
       <span class="faint">第 {{ task.round }} 轮 · {{ KIND_LETTER[task.kind] || task.kind }}类</span>

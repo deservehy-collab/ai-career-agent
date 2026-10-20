@@ -6,7 +6,7 @@
   必须打**消费方模块**的属性 —— `agents/job_agent.py` 用的是
   `from agents.llm import structured_invoke`，改 `agents.llm` 里的名字无效。
 - **检索后端**：本节点不调用检索器，证据由 state 直接注入，无需 fake 后端。
-  全程不连接 Ollama / Chroma。
+  全程不连接 Ollama。
 
 注意：`job_node` 沿用既有的 `check_non_empty(minimum=3)` 约束，因此每个用例
 至少要凑够 3 项技能（`run_job` 会自动补足填充项）。

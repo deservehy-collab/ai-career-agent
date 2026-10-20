@@ -108,8 +108,7 @@ async function request(path, { method = 'GET', body, signal } = {}) {
     // 被主动取消的请求不要伪装成"后端挂了"
     if (cause && cause.name === 'AbortError') throw cause
     throw new ApiError(
-      '无法连接后端服务。请确认 FastAPI 已在 http://127.0.0.1:8000 启动，' +
-        '并且 Vite 代理（/api）工作正常。',
+      '连不上后端服务：请先确认后端已经启动，再回来点「重新检查」。',
       { status: NETWORK_ERROR_STATUS, cause },
     )
   }

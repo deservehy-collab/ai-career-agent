@@ -14,7 +14,6 @@ import { runStatusText, runStatusTone } from '../utils/enums'
  */
 const props = defineProps({
   status: { type: String, default: 'idle' },
-  runId: { type: String, default: null },
   startedAt: { type: String, default: null },
   finishedAt: { type: String, default: null },
   errorMessage: { type: String, default: '' },
@@ -91,7 +90,6 @@ const tone = computed(() => runStatusTone(props.status))
         </p>
         <p class="faint run-line run-line--tight">
           已等待 <strong>{{ formatDuration(elapsedSeconds) }}</strong>
-          <span v-if="runId"> · run_id <code class="mono">{{ runId }}</code></span>
         </p>
       </div>
 

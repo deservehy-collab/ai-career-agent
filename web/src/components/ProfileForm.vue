@@ -10,6 +10,9 @@ import { formatList, parseList } from '../utils/storage'
  * 画像表单：直接编辑 profile store；store 内部已把改动写进 localStorage，
  * 所以这里不需要额外的"保存"按钮 —— 刷新页面内容还在。
  *
+ * 「清空自述画像」承担的是**防串味**职责：换求职方向时点一下，专业/年级/技能/
+ * 项目/目标岗位连同粘贴的招聘要求原文一起归零。分析产出的能力表**不在**此列。
+ *
  * 专业 / 年级用下拉：常用值点选即可；专业不在名单里时切「其他（手动输入）」
  * 自由填写 —— 下拉只是输入辅助，不是白名单，任何专业都要能填。
  *
@@ -73,7 +76,14 @@ function onProjectsInput(event) {
 }
 
 function handleClear() {
-  if (!window.confirm('清空自述画像？已分析得到的能力表不会被删除。')) return
+  if (
+    !window.confirm(
+      '清空画像、目标岗位与粘贴的招聘要求原文？\n\n' +
+        '换求职方向时点这里，上一次填的专业和技能不会偷偷带进下一次分析。\n' +
+        '已经分析得到的能力表**不会**被删除。',
+    )
+  )
+    return
   profile.clearProfile()
   skillsText.value = ''
   projectsText.value = ''
@@ -84,7 +94,7 @@ function handleClear() {
   <section class="panel-block">
     <div class="panel-head">
       <h2>我的画像</h2>
-      <span class="panel-src">localStorage · career-agent:profile</span>
+      <span class="panel-src">填一次就行，内容保存在这台浏览器里</span>
     </div>
 
     <div v-if="profile.storageFailed" class="notice notice-warn">
@@ -173,7 +183,7 @@ function handleClear() {
     </div>
 
     <div class="btn-row form-actions">
-      <button class="btn" @click="handleClear">清空自述画像</button>
+      <button class="btn" @click="handleClear">清空画像与求职目标</button>
       <span v-if="profile.hasLastSkills" class="faint">
         已有 {{ profile.lastSkills.length }} 项分析能力{{ profile.lastSkillsAt ? ` · 更新于 ${formatDateTime(profile.lastSkillsAt)}` : '' }}
       </span>

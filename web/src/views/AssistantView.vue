@@ -42,16 +42,15 @@ const quickQuestions = [
   '如何准备一个有竞争力的 AI 项目？',
 ]
 
-const modelLabel = computed(() => health.data?.config?.chat_model || 'qwen2.5:3b')
-
+// 状态徽章只说"能不能聊"，模型名与端口属于排查读数，留在「系统状态」页。
 const modelState = computed(() => {
   const data = health.data
-  if (health.loading && !data) return { tone: 'warn', text: '正在检测模型服务…' }
+  if (health.loading && !data) return { tone: 'warn', text: '正在检查本机模型…' }
   if (health.unreachable) return { tone: 'danger', text: '后端未连接，无法对话' }
   const ollama = data?.ollama
-  if (!ollama?.ok) return { tone: 'danger', text: 'Ollama 未启动' }
-  if (!ollama.chat_model_ready) return { tone: 'danger', text: `本地缺少模型 ${modelLabel.value}` }
-  return { tone: 'ok', text: `本地模型 ${modelLabel.value} 就绪` }
+  if (!ollama?.ok) return { tone: 'danger', text: '本机模型没启动' }
+  if (!ollama.chat_model_ready) return { tone: 'danger', text: '本机模型还没装好' }
+  return { tone: 'ok', text: '本机模型就绪' }
 })
 
 const canSend = computed(() => !sending.value && input.value.trim().length > 0)
@@ -108,7 +107,7 @@ function handleClear() {
       <div>
         <h1>AI 助手</h1>
         <p>
-          问任何关于岗位方向、技能学习顺序、项目准备与面试的问题。回答由本机 Ollama 模型
+          问任何关于岗位方向、技能学习顺序、项目准备与面试的问题。回答由电脑上的本地模型
           逐字生成，<strong>不会</strong>改动你的画像、规划任务或成长记录。
         </p>
       </div>
@@ -126,7 +125,7 @@ function handleClear() {
     </div>
 
     <p v-if="health.unreachable" class="notice notice-danger">
-      后端没连上，聊天请求发不出去。请先启动 FastAPI（127.0.0.1:8000），
+      后端没连上，聊天请求发不出去。请先启动后端，
       或到<router-link to="/status">系统状态</router-link>页查看具体原因。
     </p>
     <p v-else-if="requestError" class="notice notice-danger">{{ requestError }}</p>

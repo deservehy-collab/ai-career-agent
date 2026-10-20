@@ -7,7 +7,7 @@ import { AGENT_GROUP, getAgent } from '../utils/agents'
  * Agent 归属标记：挂在结果卡头部，说明这张卡是哪个节点产出的。
  *
  * 元数据全部取自 utils/agents.js（U1），本组件不重复定义任何 Agent 信息。
- * 鼠标悬停显示 `source` —— 即该节点在代码里的位置，保证展示名始终可追溯到真实实现。
+ * 鼠标悬停只显示这个节点**干什么**，不显示源码路径 —— 实现细节不进使用者界面。
  */
 const props = defineProps({
   /** 与 graph/workflow.py 一致的节点名：profile / growth / retrieval / … */
@@ -27,7 +27,7 @@ const style = computed(() => {
 })
 
 const title = computed(() =>
-  agent.value ? `${agent.value.source}\n${agent.value.duty}` : `未知节点：${props.node}`,
+  agent.value ? agent.value.duty : `未知节点：${props.node}`,
 )
 </script>
 

@@ -32,11 +32,12 @@ from typing import Iterator
 
 from agents import growth_agent
 from agents.growth_store import GrowthStore
+from agents.retrieval_agent import STATUS_USER_PASTED
 from graph.workflow import build_final_plan, workflow
 
 __all__ = [
     "workflow", "run_workflow", "use_growth_store", "_isolated_growth_store",
-    "project_result",
+    "project_result", "requirement_basis",
 ]
 
 #: 透出给前端的 state 字段白名单（其余是内部追踪字段，不对外）。
@@ -95,6 +96,20 @@ def _isolated_growth_store() -> Iterator[GrowthStore]:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def requirement_basis(state: dict) -> str:
+    """本次岗位要求的**主依据**是哪一档，供前端决定标签与可信度呈现。
+
+    两档，按证据来源判定，不看模型自述：
+
+    - ``user_pasted``   用户当场粘贴的招聘要求原文（逐条能反显原话）
+    - ``model_only``     没有原文 —— 岗位要求全是模型推断，前端必须标灰、
+      且**不许**显示匹配度百分比
+    """
+    if state.get("retrieval_status") == STATUS_USER_PASTED:
+        return "user_pasted"
+    return "model_only"
+
+
 def project_result(state: dict) -> dict:
     """把工作流 state 投影成对外结构：白名单字段 + 汇总方案。
 
@@ -103,6 +118,8 @@ def project_result(state: dict) -> dict:
     payload: dict = {key: state.get(key) for key in _PUBLIC_STATE_FIELDS if key in state}
     payload["growth_diff"] = state.get("growth_diff") or {}
     payload["final_plan"] = build_final_plan(state)
+    payload["requirement_basis"] = requirement_basis(state)
+    payload["user_jd_provided"] = bool(str(state.get("jd_text") or "").strip())
     return jsonable(payload)
 
 
@@ -110,7 +127,7 @@ def jsonable(payload):
     """JSON 往返，保证响应可安全序列化。
 
     业务层返回的本来就是 dict/list/str/int/bool，这里走一趟 JSON 只是为了
-    **保证**这一点（Chroma 元数据里可能混入 numpy 标量）；``default=str`` 是
+    **保证**这一点：响应里不许出现不能序列化的对象；``default=str`` 是
     最后一道兜底，只影响类型不是原生 JSON 的个别值，不增删任何字段。
     """
     return json.loads(json.dumps(payload, ensure_ascii=False, default=str))

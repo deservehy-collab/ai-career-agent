@@ -1,7 +1,6 @@
 """后端集中配置：Ollama、模型、CORS、端口与项目路径。
 
-模型名**不在这里另立一套**，而是直接从 Agent 侧导入
-（``agents.llm.MODEL_NAME`` / ``agents.retriever.EMBEDDING_MODEL``），
+模型名**不在这里另立一套**，而是直接从 Agent 侧导入（``agents.llm.MODEL_NAME``），
 这样前端展示的模型名与真正调用的模型永远不会漂移 —— 本项目不擅自更改
 六阶段业务使用的模型。
 
@@ -19,12 +18,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from agents.llm import MODEL_NAME as CHAT_MODEL
-from agents.retriever import EMBEDDING_MODEL
 
 __all__ = [
-    "REPO_ROOT", "RUNS_DIR", "KNOWLEDGE_DIR", "CHROMA_INDEX_DIR",
+    "REPO_ROOT", "RUNS_DIR", "KNOWLEDGE_DIR",
     "SKILLS_DIR", "PROJECTS_DIR",
-    "CHAT_MODEL", "EMBEDDING_MODEL", "OLLAMA_BASE_URL", "OLLAMA_TAGS_PATH",
+    "CHAT_MODEL", "OLLAMA_BASE_URL", "OLLAMA_TAGS_PATH",
     "HOST", "PORT", "CORS_ORIGINS", "EVIDENCE_MAX_LENGTH", "TASK_WORKERS",
     "TASK_RECORD_CAP", "TASK_QUEUE_CAP",
     "AUTH_DB_PATH", "JWT_SECRET_PATH", "JWT_ALGORITHM", "JWT_TTL_HOURS",
@@ -39,12 +37,11 @@ __all__ = [
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNS_DIR = REPO_ROOT / "runs"
 KNOWLEDGE_DIR = REPO_ROOT / "knowledge"
-CHROMA_INDEX_DIR = KNOWLEDGE_DIR / "index"
 SKILLS_DIR = KNOWLEDGE_DIR / "skills"
 PROJECTS_DIR = KNOWLEDGE_DIR / "projects"
 
 # ── 模型（从 Agent 侧导入，见模块 docstring）─────────────────────────────
-# CHAT_MODEL / EMBEDDING_MODEL 由上方 import 提供。
+# CHAT_MODEL 由上方 import 提供。
 
 # ── Ollama ─────────────────────────────────────────────────────────────
 OLLAMA_BASE_URL = "http://localhost:11434"
@@ -73,6 +70,11 @@ MANUAL_SKILL_MAX_CHARS = 100
 GROWTH_EVENTS_MAX_ITEMS = 200
 # 目标岗位的字符上限。
 TARGET_JOB_MAX_CHARS = 200
+# 用户粘贴的招聘要求原文上限。原文要整段进提示词，而模型的上下文是
+# CONTEXT_TOKENS（8192）—— 6000 字中文约占 4000~5000 token，留得下系统提示与
+# 输出。超长由前端提示用户截短，不在后端静默裁剪（悄悄裁掉会让用户以为
+# "后半段它也读过了"）。原文切成几条证据句子由 agents/user_jd.py 自己决定。
+JD_TEXT_MAX_CHARS = 6000
 
 # 后台任务的并发上限。**必须是 1**：runs/growth.json 与 runs/loop.json 的
 # 读-改-写只在进程内串行安全（见 tests/test_readonly_boundary.py），

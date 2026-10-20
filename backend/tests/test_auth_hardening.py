@@ -30,18 +30,48 @@ from backend.app import app  # noqa: E402
 from backend.auth import get_current_user  # noqa: E402
 
 
+class _FakeClock:
+    """顶掉 ``auth.time``：限速器只在两处读 ``time.monotonic()``。
+
+    只换 auth 模块自己的绑定，不动全局 stdlib；其余属性透传给真 ``time``。
+    """
+
+    def __init__(self, start: float = 1000.0) -> None:
+        import time as _real_time
+
+        self._real = _real_time
+        self.now = start
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
 class SlidingWindowLimiterTest(unittest.TestCase):
     """限速器本体的单元行为（窗口过期 / clear / reset）。"""
 
     def test_limited_until_window_passes(self):
-        limiter = auth._SlidingWindowLimiter(limit=3, window_seconds=0.05)
-        for _ in range(3):
-            limiter.record("k")
-        self.assertTrue(limiter.limited("k"))
-        self.assertFalse(limiter.limited("other"), "不同键互不影响")
-        import time as _time
-        _time.sleep(0.06)
-        self.assertFalse(limiter.limited("k"), "窗口滑过后应放行")
+        """窗口用假时钟推进：真 ``sleep`` 在全量跑（机器满载）时会偶发翻车。
+
+        两头都会翻：睡不够 → 该放行的还拦着；三条 record 与断言之间被调度拖过
+        整个窗口 → 该拦的已经放行。改成拨钟之后两头都钉死。
+        """
+        clock = _FakeClock()
+        with mock.patch.object(auth, "time", clock):
+            limiter = auth._SlidingWindowLimiter(limit=3, window_seconds=60)
+            for _ in range(3):
+                limiter.record("k")
+            self.assertTrue(limiter.limited("k"))
+            self.assertFalse(limiter.limited("other"), "不同键互不影响")
+            clock.advance(59)
+            self.assertTrue(limiter.limited("k"), "窗口还没滑完，仍要拦")
+            clock.advance(2)
+            self.assertFalse(limiter.limited("k"), "窗口滑过后应放行")
 
     def test_limited_does_not_record(self):
         limiter = auth._SlidingWindowLimiter(limit=1, window_seconds=60)
@@ -172,7 +202,7 @@ class TokenBoundToExistingUserTest(_AuthIsolatedCase):
         self.assertIn("不存在", me.json()["detail"])
         # 业务接口同口径：router 级鉴权依赖也要查库
         self.assertEqual(
-            self.client.get("/api/knowledge/jds", headers=headers).status_code, 401)
+            self.client.get("/api/growth/history", headers=headers).status_code, 401)
 
 
 class RegisterTriggersMigrationTest(_AuthIsolatedCase):

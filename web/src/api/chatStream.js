@@ -12,8 +12,9 @@
  *   event: done   data: {"chars": 128}
  *   event: error  data: {"message": "给人看的一句话"}
  *
- * 取消：调用方传 AbortController 的 signal。abort() 会掐断 fetch，
- * 后端生成器随之关闭并释放上游 Ollama 连接 —— 模型真的会停止生成。
+ * 取消：调用方传 AbortController 的 signal。abort() 会掐断 fetch，后端随之关闭
+ * 上游连接。注意 Ollama 不保证立即终止已开始的生成（它只有一个推理槽），
+ * 真正防止"无限生成占死服务"的是后端下发的 num_predict 上限。
  */
 
 import {

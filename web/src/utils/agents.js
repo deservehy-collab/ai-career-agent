@@ -4,8 +4,8 @@
  * 两条硬规矩
  * ----------
  * 1. **可追溯**：每个条目都保留 `node` —— 与 `graph/workflow.py` 的 `NODES` / `ORDER`
- *    里的实际节点名逐字一致，并记录 `source` 指到具体文件与函数。
- *    展示名可以面向评委优化，但绝不能与真实节点失去对应关系。
+ *    里的实际节点名逐字一致。展示名可以面向评委优化，但绝不能与真实节点失去对应关系。
+ *    源码路径**不再进界面**：使用者只看中文展示名与职责，实现细节回代码里查。
  *
  * 2. **不虚构执行状态**：后端只给四态（queued/running/succeeded/failed），
  *    `TaskRecord` 里**没有任何节点级信息**，且工作流是**纯顺序图、无条件边** ——
@@ -27,10 +27,10 @@ export const WORKFLOW_ORDER = [
   'project',
 ]
 
-/** 色族：认知 / 检索 / 匹配 / 规划。RAG（检索）单独一色，是全站唯一的紫。 */
+/** 色族：认知 / 依据 / 匹配 / 规划。依据整理单独一色，是全站唯一的紫。 */
 export const AGENT_GROUP = {
   cognition: { label: '认知', color: 'var(--agent-cognition)', soft: 'var(--agent-cognition-soft)' },
-  retrieval: { label: '检索', color: 'var(--agent-retrieval)', soft: 'var(--agent-retrieval-soft)' },
+  retrieval: { label: '依据', color: 'var(--agent-retrieval)', soft: 'var(--agent-retrieval-soft)' },
   match: { label: '匹配', color: 'var(--agent-match)', soft: 'var(--agent-match-soft)' },
   plan: { label: '规划', color: 'var(--agent-plan)', soft: 'var(--agent-plan-soft)' },
 }
@@ -40,10 +40,8 @@ export const AGENTS = [
     node: 'profile',
     order: 1,
     displayName: '能力画像 Agent',
-    shortName: 'Profile',
     group: 'cognition',
     duty: '读取专业 / 年级 / 自述技能 / 项目经历，按证据分级产出结构化能力表，并给出技术优势与短板。',
-    source: 'agents/profile_agent.py · profile_node',
     outputs: ['user_skills', 'user_strengths', 'user_weaknesses'],
     primaryKey: 'user_skills',
     anchor: 'card-profile',
@@ -53,10 +51,8 @@ export const AGENTS = [
     node: 'growth',
     order: 2,
     displayName: '成长追踪 Agent',
-    shortName: 'Growth',
     group: 'cognition',
     duty: '合并成长历史与本次画像作为基线，按本轮成长事件升级技能等级，并记录升级前后的差异。',
-    source: 'agents/growth_agent.py · growth_node',
     outputs: ['user_skills_before', 'skill_updates', 'growth_diff'],
     primaryKey: 'growth_diff',
     anchor: 'card-growth',
@@ -65,24 +61,20 @@ export const AGENTS = [
   {
     node: 'retrieval',
     order: 3,
-    displayName: '岗位知识库检索（RAG）',
-    shortName: 'Retrieval',
+    displayName: '招聘原文整理 Agent',
     group: 'retrieval',
-    duty: '按目标岗位检索真实 JD 向量库，取回带原文出处的岗位证据。只取事实，不做任何判定，也不写学生能力。',
-    source: 'agents/retrieval_agent.py · retrieval_node → agents/retriever.py',
+    duty: '把你粘贴的招聘要求原文逐句切开，作为本次分析的唯一事实依据。只整理原话，不做任何判定，也不写学生能力。',
     outputs: ['job_evidence', 'retrieval_status', 'retrieval_diagnostics'],
     primaryKey: 'job_evidence',
     anchor: 'card-evidence',
-    outputLabel: '条证据',
+    outputLabel: '句原话',
   },
   {
     node: 'job',
     order: 4,
     displayName: '岗位要求 Agent',
-    shortName: 'Job',
     group: 'match',
-    duty: '结合检索到的岗位证据，生成目标岗位的能力要求清单，并标注每条要求的证据强度与来源。',
-    source: 'agents/job_agent.py · job_node',
+    duty: '逐条从粘贴的招聘要求原文里抽出能力要求，并标注每条要求在原文里的出处与证据强度。',
     outputs: ['job_requirements'],
     primaryKey: 'job_requirements',
     anchor: 'card-requirements',
@@ -92,10 +84,8 @@ export const AGENTS = [
     node: 'assessment',
     order: 5,
     displayName: '能力差距 Agent',
-    shortName: 'Assessment',
     group: 'match',
     duty: '把岗位要求与学生能力逐项对照。等级 / 状态 / 优先级全部由代码判定，不由模型自由发挥。',
-    source: 'agents/assessment_agent.py · assessment_node',
     outputs: ['skill_gaps'],
     primaryKey: 'skill_gaps',
     anchor: 'card-gaps',
@@ -105,10 +95,8 @@ export const AGENTS = [
     node: 'learning',
     order: 6,
     displayName: '学习路线 Agent',
-    shortName: 'Learning',
     group: 'plan',
     duty: '按缺口优先级与技能前置关系排出学习阶段，每个阶段给出目标、前置要求与可验证的完成标准。',
-    source: 'agents/learning_agent.py · learning_node',
     outputs: ['learning_plan'],
     primaryKey: 'learning_plan',
     anchor: 'card-learning',
@@ -118,10 +106,8 @@ export const AGENTS = [
     node: 'project',
     order: 7,
     displayName: '实战项目 Agent',
-    shortName: 'Project',
     group: 'plan',
     duty: '结合技能缺口与学习路线推荐实战项目，给出技术栈、对应阶段与可验收的最终成果。',
-    source: 'agents/project_agent.py · project_node',
     outputs: ['project_plan'],
     primaryKey: 'project_plan',
     anchor: 'card-projects',
@@ -158,7 +144,7 @@ function countOf(value) {
  *
  * `degraded` 的判据**全部来自真实字段**：
  *   - profile / job / assessment / learning / project：产出数组为空
- *   - retrieval：`retrieval_status !== 'matched'`（后端会给 no_source / not_mentioned / ambiguous）
+ *   - retrieval：`retrieval_status !== 'user_pasted'`（后端只会给 user_pasted / no_source）
  *   - growth：`growth_diff.outcome` 为 `store_unreadable` 或 `gate_unavailable`
  *     （注意：`no_events` **不是**降级 —— 本轮本来就没有成长事件，属正常）
  */
@@ -192,12 +178,12 @@ function summarizeNode(agent, result) {
     case 'retrieval': {
       const status = result.retrieval_status || ''
       const count = countOf(result.job_evidence)
-      const statusOk = status === 'matched'
-      // 正常情况下 status=matched 必然带回证据；两者矛盾时按"有问题"处理，
+      const statusOk = status === 'user_pasted'
+      // 正常情况下 status=user_pasted 必然切出原话；两者矛盾时按"有问题"处理，
       // 不要因为状态字段好看就把零证据显示成正常。
       let note = ''
-      if (!statusOk) note = '检索未命中，已降级继续（岗位要求仍会生成）'
-      else if (count === 0) note = '检索状态为已命中，却没有返回任何证据'
+      if (!statusOk) note = '没有可用的招聘原文，岗位要求改由模型推断（已如实标注）'
+      else if (count === 0) note = '状态显示用了原文，却没切出任何句子'
       return {
         present: true,
         count,

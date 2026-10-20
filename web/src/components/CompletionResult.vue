@@ -53,15 +53,44 @@ const hasEvent = computed(() => !!r.value.growth_event)
 const hasPreview = computed(() => r.value.growth_evaluated === true && updates.value.length > 0)
 
 const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
+
+/**
+ * 后台把同一句失败原因同时放在 `reason` 和 `warnings` 里，②③两块又各读一遍，
+ * 结果用户看见三遍同一句话。原因按"谁拥有它"只说一次：
+ * 完成记录没写成 → ①；写成了但构不成成果 → ②；其余 → ③。
+ */
+const eventFailed = computed(
+  () => !hasEvent.value && !!r.value.reason && r.value.completion_written === true,
+)
+const reasonShownElsewhere = computed(
+  () => r.value.completion_written === false || eventFailed.value,
+)
+const previewNote = computed(() =>
+  reasonShownElsewhere.value ? '' : r.value.reason || '',
+)
+const visibleWarnings = computed(() =>
+  warnings.value.filter((w) => !(reasonShownElsewhere.value && w === r.value.reason)),
+)
+
+/**
+ * 技能名没进技能标准词表有两种下场，得说清楚是哪一种：
+ * 词表压根没有这项技能 → 按任务里写的原名记账；同时沾上好几项 → 不猜，本次不升级。
+ * 两边都取后端已经算好的字段对照，前端不重实现判定规则。
+ */
+const nameKey = (s) => String(s ?? '').trim().toLowerCase().replace(/ /g, '')
+const canonicalKeys = computed(() => new Set((r.value.skills_canonical || []).map(nameKey)))
+const skillsBookedByRawName = computed(() =>
+  unmappedSkills.value.filter((s) => canonicalKeys.value.has(nameKey(s))),
+)
+const skillsNotJudged = computed(() =>
+  unmappedSkills.value.filter((s) => !canonicalKeys.value.has(nameKey(s))),
+)
 </script>
 
 <template>
   <section class="card">
     <div class="card-head">
-      <h2>
-        提交结果
-        <span class="sub mono">{{ r.task_id }}</span>
-      </h2>
+      <h2>提交结果</h2>
       <div class="btn-row">
         <AppBadge :text="loopStatusText(r.status)" :tone="loopStatusTone(r.status)" />
         <AgentTag node="growth" />
@@ -73,14 +102,14 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
       <div class="result-block">
         <h3 class="result-title">
           ① 任务完成记录
-          <span class="sub">写入 runs/loop.json，这是唯一真正落盘的一步</span>
+          <span class="sub">这一步已经正式保存，三块里只有它是真落盘的</span>
         </h3>
         <div class="btn-row btn-row--tight">
           <AppBadge
             :text="completionStatusText(r.completion_status)"
             :tone="completionStatusTone(r.completion_status)"
           />
-          <span class="faint">磁盘写入：{{ r.completion_written ? '是' : '否' }}</span>
+          <span class="faint">已保存：{{ r.completion_written ? '是' : '否' }}</span>
         </div>
         <dl class="kv kv--mid">
           <dt>完成时间</dt>
@@ -121,17 +150,21 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
             <dd>{{ r.growth_event.evidence }}</dd>
           </dl>
         </template>
-        <p v-else class="faint flush-first">
-          没有构造成长成果：{{ r.reason || '原因未给出' }}。
+        <p v-else-if="eventFailed" class="faint flush-first">
+          没有构造成长成果：{{ r.reason }}。
           <strong>任务完成记录不受影响</strong>，只是这条任务无法作为技能升级的依据。
         </p>
 
-        <div v-if="unmappedSkills.length" class="notice notice-warn">
-          未识别的技能名（不会自动映射到相似技能）：{{ joinList(unmappedSkills) }}
+        <div v-if="skillsBookedByRawName.length" class="notice notice-info">
+          技能标准清单里没有这几项，已按任务里写的原名记账：
+          {{ joinList(skillsBookedByRawName) }}
+        </div>
+        <div v-if="skillsNotJudged.length" class="notice notice-warn">
+          这几项技能名同时对应好几项技能，系统不猜，本次没有据此升级：
+          {{ joinList(skillsNotJudged) }}。把任务名或技能写得更具体一些就能认出来。
         </div>
         <div v-if="duplicateEvents.length" class="notice notice-info">
-          该成果历史上已处理过（指纹
-          <span class="mono">{{ duplicateEvents[0].fingerprint }}</span>），跳过以免重复升级。
+          这条成果之前已经记过了，这次跳过，不会重复升级。
         </div>
         <div v-for="(item, i) in invalidEvents" :key="i" class="notice notice-warn">
           成果未通过校验：{{ item.reason }}
@@ -147,8 +180,8 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
 
         <div class="notice notice-warn notice--tight">
           <strong>预览尚未写入成长历史。</strong>
-          本接口不会改动 <span class="mono">runs/growth.json</span>；
-          技能等级正式落盘发生在「成长记录」页点击「生成下一轮」时，由 growth_node 完成。
+          提交这一步不会改动成长记录；技能等级正式生效，是在「成长记录」页点
+          「生成下一轮」的时候。
         </div>
 
         <template v-if="!r.growth_evaluated">
@@ -158,7 +191,7 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
               :tone="growthOutcomeTone(r.growth_outcome)"
             />
           </div>
-          <p class="faint result-note">{{ r.reason || '' }}</p>
+          <p v-if="previewNote" class="faint result-note">{{ previewNote }}</p>
         </template>
 
         <template v-else>
@@ -221,7 +254,7 @@ const isHistoryOnly = computed(() => r.value.baseline_source === 'history_only')
         </template>
       </div>
 
-      <div v-for="(warn, i) in warnings" :key="i" class="notice notice-warn">{{ warn }}</div>
+      <div v-for="(warn, i) in visibleWarnings" :key="i" class="notice notice-warn">{{ warn }}</div>
     </div>
   </section>
 </template>

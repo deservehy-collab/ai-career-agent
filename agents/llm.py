@@ -12,8 +12,22 @@ from pydantic import BaseModel
 
 MODEL_NAME = "qwen2.5:3b"
 
+#: 单次生成的 token 硬上限。**必须设**：Ollama 默认 num_predict=-1（无限生成），
+#: 小模型偶尔不吐 EOS 就会一直说到天荒地老，而它独占 Ollama 唯一的推理槽，
+#: 之后所有请求（含另外六个节点）全部排队饿死 —— 且客户端断开也停不掉它。
+MAX_OUTPUT_TOKENS = 2048
+
+#: 上下文窗口。Ollama 默认 4096，塞满后会自动丢弃早期 token 续命（context shift），
+#: 模型在这种状态下最容易不吐 EOS，是上面那种失控的触发条件。
+CONTEXT_TOKENS = 8192
+
 # 全局唯一实例，避免每个 Agent 重复创建连接
-llm = ChatOllama(model=MODEL_NAME, temperature=0.2)
+llm = ChatOllama(
+    model=MODEL_NAME,
+    temperature=0.2,
+    num_predict=MAX_OUTPUT_TOKENS,
+    num_ctx=CONTEXT_TOKENS,
+)
 
 T = TypeVar("T", bound=BaseModel)
 

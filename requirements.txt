@@ -3,10 +3,6 @@ langchain-ollama>=1.1.0
 langgraph>=1.2.14
 pydantic>=2.13.5
 
-# RAG 岗位知识库（向量库 + LangChain 适配层，见 scripts/build_index.py）
-chromadb>=1.5.9
-langchain-chroma>=1.1.0
-
 # Web API 层（前后端重建，见 backend/；版本与本机 .venv 已装版本对齐，精确锁定）
 fastapi==0.143.0
 uvicorn==0.54.0

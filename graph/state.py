@@ -7,8 +7,7 @@ class CareerState(TypedDict, total=False):
     # ---- 输入 ----
     user_profile: dict  # 学生个人信息（专业/年级/自述技能/项目经历）
     target_job: str  # 目标岗位
-    target_company: str  # 可选：限定岗位知识库检索的公司（不填则按跨公司概览检索）
-    jd_source_id: str  # 可选：精确匹配某一份真实 JD（优先级高于 target_company）
+    jd_text: str  # 可选：用户当场粘贴的招聘要求原文，本次岗位要求的唯一依据
     growth_events: list  # 可选：新学习成果 / 新项目经历（阶段五输入），缺省视为无新成果
 
     # ---- Profile Agent ----
@@ -23,10 +22,10 @@ class CareerState(TypedDict, total=False):
     skill_updates: list  # 逐项等级变化 [{skill, from, to, reason, source}]
     growth_diff: dict  # 等级 / 缺口 / 匹配率的前后差异
 
-    # ---- Retrieval Agent（RAG 岗位知识库，只描述岗位，不是学生能力）----
-    job_evidence: list  # 检索到的岗位证据 [{company_slug, skill, requirement_type, context, note, ...}]
-    retrieval_status: str  # matched / not_mentioned / no_source / ambiguous
-    retrieval_diagnostics: dict  # 检索诊断：命中路径、样本范围、失败原因等
+    # ---- Retrieval Agent（依据整理：只描述岗位要什么，不是学生能力）----
+    job_evidence: list  # 岗位要求原文逐句记录 [{skill, note, provenance, source_id, ...}]
+    retrieval_status: str  # user_pasted / no_source
+    retrieval_diagnostics: dict  # 依据整理诊断：原话句数、过滤掉的短句、空原文原因等
 
     # ---- Job Agent ----
     job_requirements: list  # 岗位要求 [{skill, importance, level, reason}]

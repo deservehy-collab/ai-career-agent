@@ -20,13 +20,12 @@ POST /api/growth/manual-event  手动补录一条成长成果                   
 POST /api/growth/next-round    生成下一轮计划（202；队列满 503）           ✅           ✅ 本人 growth/loop.json
 GET  /api/growth/history       成长历史                                    ✅           ❌ 只读
 GET  /api/tasks                轮次 / 任务清单（limit/offset 分页）         ✅           ❌ 只读
-GET  /api/knowledge/jds        真实 JD 元信息                              ✅           ❌ 只读
-GET  /api/health               系统状态（全量探测 Ollama/Chroma/store）     ✅           ❌ 只读
+GET  /api/health               系统状态（全量探测 Ollama/知识库/store）    ✅           ❌ 只读
 =============================  ==========================================  ============  ================================
 
 除 ``/api/ping`` 与注册/登录两个入口外，**所有接口都要求 Bearer token**，
 包括 ``/api/health``：它回报本机模型与知识库的可达性，属于运维读数，不该让
-未登录的请求白拿一次全量探测（一次 health 会连 Ollama 与 Chroma）。登录页的
+未登录的请求白拿一次全量探测（一次 health 会连 Ollama 并读知识库）。登录页的
 "后端未连接"提示不依赖这个接口 —— 那类前置检查用 ``/api/ping`` 或请求失败
 本身来判断。
 
@@ -65,7 +64,8 @@ from backend.deps import create_stores, create_task_manager
 from backend.jobs import STATUS_QUEUED, QueueFull, TaskManager
 from backend.migration import migrate_legacy_user_data
 from backend.schemas import (
-    AnalyzeRequest, CompleteTaskRequest, ManualGrowthEventRequest, NextRoundRequest,
+    AnalyzeRequest, ClearTasksRequest, CompleteTaskRequest, ManualGrowthEventRequest,
+    NextRoundRequest,
 )
 from backend.services import Stores
 
@@ -154,7 +154,7 @@ def ping() -> dict:
     """无鉴权轻量探活：只回答"进程活着"，**不**连任何外部依赖。
 
     反向代理 / 运维脚本需要一张不带 token 的健康票；全量探测（Ollama、
-    Chroma、两个 store）继续留在需要登录的 ``/api/health``，两者职责不同。
+    知识库、两个 store）继续留在需要登录的 ``/api/health``，两者职责不同。
     """
     return {"status": "ok", "time": datetime.now().isoformat(timespec="seconds")}
 
@@ -162,9 +162,9 @@ def ping() -> dict:
 # ── 健康检查 ────────────────────────────────────────────────────────────
 @app.get("/api/health", tags=["system"], summary="系统状态", dependencies=auth_required)
 def get_health(stores: Stores = Depends(create_stores)) -> dict:
-    """报告 Ollama / Chroma 索引 / 知识库 / 两个 store 的可达性与可写性。只读。
+    """报告 Ollama / 知识库 / 两个 store 的可达性与可写性。只读。
 
-    要求登录：未登录的请求不该白拿一次全量探测（本接口会连 Ollama 与 Chroma）。
+    要求登录：未登录的请求不该白拿一次全量探测（本接口会连 Ollama 并读知识库）。
     """
     return services.health(stores)
 
@@ -313,9 +313,10 @@ def post_next_round(
     """
     profile = payload.user_profile.model_dump() if payload and payload.user_profile else None
     target_job = payload.target_job if payload else None
+    jd_text = payload.jd_text if payload else None
     run_id = manager.submit(
         services.run_next_round, stores,
-        user_profile=profile, target_job=target_job,
+        user_profile=profile, target_job=target_job, jd_text=jd_text,
         kind="next_round", owner=current["id"],
     )
     return {"status": STATUS_QUEUED, "run_id": run_id, "kind": "next_round"}
@@ -347,7 +348,18 @@ def get_growth_history(stores: Stores = Depends(create_stores)) -> dict:
     return services.growth_history(stores)
 
 
-@app.get("/api/knowledge/jds", tags=["knowledge"], summary="查询真实 JD 元信息", dependencies=auth_required)
-def get_jds() -> dict:
-    """列出 knowledge/jd 下所有真实 JD 的元信息，供前端选择匹配目标。只读。"""
-    return services.list_jds()
+@app.post("/api/tasks/clear", tags=["growth"], summary="清空任务清单", dependencies=auth_required)
+def post_clear_tasks(
+    payload: ClearTasksRequest | None = None,
+    stores: Stores = Depends(create_stores),
+) -> dict:
+    """把**本人**的任务清单备份后清成空。成长历史与技能等级不受影响。
+
+    清单里还有没记账的打卡成果时返回 ``needs_confirmation``（HTTP 状态仍是 200，
+    用 body 说真相）：前端要先把这件事告诉用户，确认后才带
+    ``drop_pending_events: true`` 重试。清空前一定先落一个
+    ``loop.json.cleared-<时间戳>`` 备份，路径在返回体的 ``backup`` 里。
+    """
+    return services.clear_tasks(
+        stores, drop_pending_events=bool(payload and payload.drop_pending_events),
+    )

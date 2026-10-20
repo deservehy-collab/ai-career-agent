@@ -22,17 +22,16 @@ export const logout = () => api.post('/auth/logout')
 /** `GET /api/health` → {status, ollama, index, knowledge, stores, config} */
 export const getHealth = (options) => api.get('/health', options)
 
-/** `GET /api/knowledge/jds` → {count, jds: [{source_id, company_slug, job_name, ...}]} */
-export const listJds = (options) => api.get('/knowledge/jds', options)
-
 /**
  * `POST /api/analyze` → 202 {status: "queued", run_id, kind: "analyze"}
  *
  * 请求体（AnalyzeRequest，user_profile 与 target_job 必填）：
  *   user_profile : {major, grade, skills: string[], projects: string[]}
  *   target_job   : string（minLength 1）
+ *   jd_text      : string | null（可省）—— 用户当场粘贴的招聘要求原文，本次岗位要求的唯一依据。
+ *                  上限 config.JD_TEXT_MAX_CHARS（6000 字），超长会 422，前端已提前拦住。
+ *                  不传时岗位要求全由模型推断，前端整栏标灰并**不给**匹配度百分比。
  *   growth_events: object[]（可省）—— ⚠️ 分析链路是只读的，绝不在这里传成长事件
- *   target_company / jd_source_id : string | null（可省，二者同时传时后端会校验归属一致）
  */
 export const startAnalyze = (payload) => api.post('/analyze', payload)
 
@@ -89,6 +88,20 @@ export const completeTask = (taskId, body) =>
   api.post(`/tasks/${encodeURIComponent(taskId)}/complete`, body)
 
 /**
+ * `POST /api/tasks/clear` →
+ *   {status, rounds_removed, tasks_removed, backup, pending_events, warning}
+ *
+ * status 三种：`cleared`（已清空）/ `needs_confirmation`（有成果还没进成长历史，
+ * 什么都没动）/ `refused`（清单文件不能安全写，什么都没动）。
+ *
+ * 只重置任务清单，**成长历史一行都不动**。清空前一定先把原文件备份，
+ * `backup` 就是备份名，照着它能还原。
+ * 只有带着 `dropPendingEvents: true` 才会把还没记账的成果一起丢掉。
+ */
+export const clearTasks = (dropPendingEvents = false) =>
+  api.post('/tasks/clear', { drop_pending_events: dropPendingEvents })
+
+/**
  * `GET /api/growth/pending` →
  *   {events:[{type,title,skills[],evidence,at}],
  *    tasks:[{task_id,title,fingerprint}],
@@ -114,7 +127,7 @@ export const addManualEvent = (body) => api.post('/growth/manual-event', body)
  *   {status, writable, warning, path,
  *    history:[{at, events[], user_skills_before[], user_skills_after[],
  *              level_changes[], blocked_upgrades[], skipped[], invalid_events[],
- *              knowledge_base_status, target_job, jd_source_id}],
+ *              knowledge_base_status, target_job}],
  *    latest_skills:[{skill,level}], baseline:{source,at,user_skills[]}, confirmed_count}
  */
 export const getGrowthHistory = (options) => api.get('/growth/history', options)
@@ -127,5 +140,8 @@ export const getGrowthHistory = (options) => api.get('/growth/history', options)
  *
  * 结果用 `GET /api/runs/{run_id}` 查；`result` 有两种形状（无待办时会早退，
  * 不带 target_job / user_skills / growth_diff / learning_plan / project_plan 等字段）。
+ *
+ * 可带 `jd_text`（含义同 startAnalyze）：下一轮沿用分析页粘过的那份原文，用户不必重粘。
+ * 原文只跟着请求走，**不写进 runs/loop.json**。
  */
 export const startNextRound = (body) => api.post('/growth/next-round', body)
