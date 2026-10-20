@@ -28,6 +28,51 @@ cd web && npm install && npm run dev   # http://localhost:5173
 
 探活：`GET /api/ping`（无鉴权、不探测依赖）；全量体检：登录后 `GET /api/health`。
 
+## 10 分钟复现（评审专用）
+
+从一台没装过本项目的电脑开始，按顺序做下面 7 步。除安装依赖与首次拉模型需要联网，其余全部在本机完成，不需要任何云端 API Key。
+
+> Windows 用 `.venv/Scripts/`；macOS / Linux 换成 `.venv/bin/`。首次先 `python -m venv .venv`。
+
+| 时间 | 做什么 | 命令 / 操作 | 通过标准 |
+| --- | --- | --- | --- |
+| 0–2 min | 装 Ollama 与模型 | 安装 [Ollama](https://ollama.com) 后执行 `ollama pull qwen2.5:3b`（约 1.9 GB） | `ollama list` 里能看到 `qwen2.5:3b` |
+| 2–3.5 min | Python 依赖 | `.venv/Scripts/python.exe -m pip install -r requirements.txt` | 无报错；`python -c "import langgraph, fastapi"` 通过 |
+| 3.5–4.5 min | 前端依赖 | `cd web && npm install` | 无 ERESOLVE 报错 |
+| 4.5–5.5 min | 起后端 | 另开终端，在仓库根执行 `.venv/Scripts/python.exe -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --workers 1` | 访问 `http://127.0.0.1:8000/api/ping` 返回 `{"status":"ok",...}` |
+| 5.5–6.5 min | 起前端并注册 | `cd web && npm run dev` → 打开 `http://localhost:5173/register` | 注册成功并进入首页 |
+| 6.5–9 min | 跑一遍主流程 | 在首页填入目标岗位、粘贴一段真实招聘要求原文 → 开始分析 → 等待结果 | 见下方「这一遍要看什么」 |
+| 9–10 min | 跑自动化测试 | `.venv/Scripts/python.exe -m pytest tests backend/tests -q` | `373 passed, 2 xfailed`（约 11 秒） |
+
+**关于登录**：仓库不附带任何用户数据（`runs/` 被 gitignore），所以干净克隆里没有现成账号。登录页的「体验账号」是 `demo / demo1234`——先到注册页用这组用户名密码注册一次，它就会成为可用的演示账号；也可以直接注册自己的账号。
+
+**这一遍要看什么**（对应本项目的核心主张）：
+
+1. **粘了原文**：结果页每条岗位要求都能展开看到它对应的原文句子，标记为「原文依据」；匹配度分母只统计有原文支撑的要求。
+2. **不粘原文**：仍然能出分析和计划，但岗位要求整栏标注「模型补充」、**不显示匹配度百分比**，而不是摆一排 0。
+3. **任务完成**：学习计划里的任务提交证据后才能标记完成；证据为空会被拒绝。
+4. **成长闭环**：完成一条任务后，成长记录里出现对应技能；下一轮计划的缺口会按新能力重算。
+
+一次七节点分析在本机（RTX 4050 6GB + `qwen2.5:3b`）约 1–3 分钟；首次调用还要加载模型，纯 CPU 环境会更久。界面上的数据都是本次操作实时产生的，没有预置演示数据。
+
+### 复现性声明
+
+- **模型与参数固定**：`agents/llm.py` 中 `MODEL_NAME = "qwen2.5:3b"`、`temperature = 0.2`、`num_ctx = 8192`、`num_predict = 2048`。同一份输入在同一模型版本下，**结构与判定规则可复现**（证据回查、匹配度分母、技能归一、成长门禁都是确定性代码），但模型生成的自由文本与个别等级判断可能措辞不同。
+- **无云端依赖、无隐藏数据**：不使用任何在线 LLM API；岗位依据只来自「用户粘贴的原文」与「模型推断」两档，仓库内没有预置 JD 语料，也没有向量库。
+- **测试可复现**：测试全程 patch 掉模型调用、用临时目录构造 store，不碰项目 `runs/`、不需要 Ollama 在跑，因此结果是确定的秒级回归。`2 xfailed` 是 Windows 上裸并发写 JSON 的已知边界，用例照跑、失败留痕，不算回归（见「已知限制」第 3 条）。
+- **运行时数据**：首次启动自动创建 `runs/app.db` 与 `runs/jwt_secret.key`；删除 `runs/` 等于清空所有账号与业务数据，重新注册即可从零复现。
+
+### 可选环境变量
+
+后端**不会自动读取 `.env` 文件**（未引入 python-dotenv），需要时请在启动前 export。两个变量都有默认值，不设置也能完整运行：
+
+| 变量 | 作用 | 默认 |
+| --- | --- | --- |
+| `JWT_SECRET` | 覆盖 JWT 签名密钥，不落 `runs/jwt_secret.key` | 首次使用时随机生成并写入该文件 |
+| `OLLAMA_HOST` | 覆盖聊天接口（`/api/chat`）访问的 Ollama 地址 | `http://localhost:11434` |
+
+模板见仓库根目录的 `.env.example`。
+
 ## 数据布局
 
 ```
